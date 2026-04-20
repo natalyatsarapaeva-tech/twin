@@ -288,11 +288,11 @@ window.analyzeBatch = async function() {
   const btn = document.getElementById('batch-btn');
   btn.disabled = true; btn.textContent = '⏳ Анализирую…';
 
-  const systemPrompt = `Ты помощник по таск-менеджменту. Разбери список дел и верни ТОЛЬКО валидный JSON-массив без пояснений и markdown.
+  const systemPrompt = `Ты помощник по таск-менеджменту, вся коммуникация с твоей стороны должна быть на английском языке, даже если исходная задача на русском. Разбери предложенный список дел и верни ТОЛЬКО валидный JSON-массив без пояснений и markdown.
 
 Для каждого дела:
 {
-  "title": "название на русском",
+  "title": "название на английском",
   "tags": ["tag1", "tag2"],
   "dueDate": "YYYY-MM-DD или null",
   "priority": "high|med|low|none",
@@ -303,7 +303,7 @@ window.analyzeBatch = async function() {
 Работа: dev, strategy, analytics, clients, leads, ux
 Личное: kids, health, urgent, ideas, money, home, travel, rest, swedish
 
-Автоматически определяй теги по контексту. Сегодня: ${new Date().toISOString().split('T')[0]}.`;
+Автоматически определяй теги по контексту, у каждого дела может быть несколько тэгов. Сегодня: ${new Date().toISOString().split('T')[0]}.`;
 
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {

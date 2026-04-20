@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>New Task</title>
+  <link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:#f0f4f8; --surface:#ffffff; --surface2:#e8eef5; --border:#dce5ef;
+      --blue:#4a7fb5; --blue-light:#7aadd4; --blue-pale:#c8dcf0;
+      --lavender:#8b9fd4; --lav-pale:#dde3f5; --slate:#3d5a7a; --slate-dark:#2e4a6a;
+      --text:#1e2d3d; --text-soft:#6b83a0; --white:#ffffff; --shadow:rgba(61,90,122,0.12);
+      --green:#5a9e82; --green-pale:#ddf0ea; --amber:#c49a4a; --red:#c05a5a;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+
+    .header{background:linear-gradient(135deg,var(--slate) 0%,#2e4a6a 100%);padding:48px 24px 24px;}
+    .back-link{display:flex;align-items:center;gap:6px;color:var(--blue-pale);font-size:14px;text-decoration:none;margin-bottom:16px;opacity:.9;}
+    .header h1{font-family:'Spectral',serif;font-size:26px;color:var(--white);}
+    .header p{color:var(--blue-pale);font-size:13px;margin-top:4px;opacity:.8;}
+
+    .body{padding:16px 16px 100px;}
+
+    /* SECTIONS */
+    .section{background:var(--white);border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:0 2px 10px var(--shadow);}
+    .section-title{font-size:11px;text-transform:uppercase;letter-spacing:.15em;color:var(--blue);font-weight:700;margin-bottom:14px;}
+
+    /* FIELD */
+    .field-label{font-size:12px;color:var(--text-soft);display:block;margin-bottom:5px;margin-top:12px;font-weight:500;}
+    .field-label:first-child{margin-top:0;}
+    .field-input{width:100%;padding:11px 14px;border-radius:11px;border:2px solid var(--border);background:var(--surface2);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text);outline:none;}
+    .field-input:focus{border-color:var(--lavender);background:var(--white);}
+    .field-input::placeholder{color:var(--text-soft);}
+    textarea.field-input{resize:vertical;min-height:80px;}
+    select.field-input{cursor:pointer;}
+
+    /* TAGS */
+    .tags-grid{display:flex;flex-direction:column;gap:10px;}
+    .tag-group-label{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--text-soft);font-weight:600;margin-bottom:4px;}
+    .tag-options{display:flex;gap:6px;flex-wrap:wrap;}
+    .tag-opt{padding:6px 12px;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;border:2px solid var(--border);background:transparent;color:var(--text-soft);font-family:'DM Sans',sans-serif;transition:all .2s;}
+    .tag-opt.work.sel{background:var(--lav-pale);color:#4a5fa0;border-color:var(--lavender);}
+    .tag-opt.personal.sel{background:var(--green-pale);color:#3d7a62;border-color:#7abfa0;}
+
+    /* SUBTASKS */
+    .subtask-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
+    .subtask-row input{flex:1;padding:9px 12px;border-radius:10px;border:2px solid var(--border);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text);outline:none;background:var(--surface2);}
+    .subtask-row input:focus{border-color:var(--lavender);background:var(--white);}
+    .sub-del{background:none;border:none;font-size:20px;color:var(--text-soft);cursor:pointer;padding:4px;flex-shrink:0;}
+    .add-row-btn{width:100%;padding:10px;border-radius:10px;border:2px dashed var(--lavender);background:transparent;color:var(--lavender);font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:4px;}
+
+    /* API KEY */
+    .api-box{background:var(--lav-pale);border-radius:14px;padding:14px 16px;margin-bottom:14px;display:flex;flex-direction:column;gap:8px;}
+    .api-box label{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--lavender);font-weight:700;}
+    .api-box input{padding:9px 12px;border-radius:10px;border:2px solid var(--border);font-family:monospace;font-size:13px;outline:none;background:var(--white);}
+    .api-box input:focus{border-color:var(--lavender);}
+    .api-note{font-size:12px;color:var(--text-soft);}
+
+    /* AI BATCH */
+    .ai-batch{background:linear-gradient(135deg,var(--lav-pale),#eef1fc);border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:0 2px 10px var(--shadow);}
+    .ai-batch-title{font-size:11px;text-transform:uppercase;letter-spacing:.15em;color:var(--lavender);font-weight:700;margin-bottom:12px;}
+    .ai-batch textarea{width:100%;padding:12px;border-radius:11px;border:2px solid var(--border);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text);resize:vertical;min-height:120px;outline:none;background:var(--white);}
+    .ai-batch textarea:focus{border-color:var(--lavender);}
+    .ai-batch-btn{margin-top:10px;padding:11px 20px;border-radius:11px;background:var(--slate);color:var(--white);border:none;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;width:100%;}
+    .ai-batch-btn:disabled{opacity:.5;}
+
+    /* AI RESULT */
+    .ai-results-wrap{display:none;margin-top:12px;}
+    .ai-results-wrap.open{display:block;}
+    .ai-task-preview{background:var(--white);border-radius:12px;padding:14px;margin-bottom:8px;border:2px solid var(--border);}
+    .ai-task-preview.selected{border-color:var(--lavender);}
+    .ai-task-check{display:flex;align-items:flex-start;gap:10px;}
+    .ai-checkbox{width:20px;height:20px;border-radius:6px;border:2px solid var(--border);flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:var(--white);}
+    .ai-checkbox.checked{background:var(--lavender);border-color:var(--lavender);color:var(--white);}
+    .ai-task-name{font-size:14px;font-weight:500;color:var(--text);}
+    .ai-task-tags{display:flex;gap:4px;margin-top:5px;flex-wrap:wrap;}
+    .ai-tag-chip{font-size:11px;padding:2px 7px;border-radius:6px;}
+    .ai-tag-chip.work{background:var(--lav-pale);color:#4a5fa0;}
+    .ai-tag-chip.personal{background:var(--green-pale);color:#3d7a62;}
+    .batch-actions{display:flex;gap:8px;margin-top:8px;}
+    .batch-save-btn{flex:1;padding:13px;border-radius:12px;background:var(--green);color:var(--white);border:none;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;}
+    .batch-save-btn:disabled{opacity:.5;}
+    .batch-select-all{padding:13px 16px;border-radius:12px;background:var(--surface2);color:var(--text-soft);border:none;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:600;}
+
+    /* SAVE BUTTON */
+    .save-btn{width:100%;padding:16px;border-radius:14px;background:var(--slate);color:var(--white);font-size:16px;font-weight:600;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:4px;}
+    .save-btn:disabled{opacity:.5;}
+
+    /* TOAST */
+    #toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--slate);color:var(--white);padding:12px 22px;border-radius:12px;font-size:14px;font-weight:600;transition:transform .3s;z-index:999;white-space:nowrap;}
+    #toast.show{transform:translateX(-50%) translateY(0);}
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <a class="back-link" href="index.html">← Back</a>
+  <h1>New Task</h1>
+  <p>Fill in the form or use AI to add tasks in bulk</p>
+</div>
+
+<div class="body">
+
+  <!-- API KEY -->
+  <div class="api-box">
+    <label>OpenAI API Key</label>
+    <input type="password" id="api-key" placeholder="sk-..." autocomplete="off"/>
+    <div class="api-note">🔒 Stored only in your browser</div>
+  </div>
+
+  <!-- MANUAL FORM -->
+  <div class="section">
+    <div class="section-title">📋 Main info</div>
+
+    <label class="field-label">Название дела *</label>
+    <input class="field-input" id="f-title" placeholder="What needs to be done?"/>
+
+    <label class="field-label">Description / context</label>
+    <textarea class="field-input" id="f-desc" placeholder="Details, links, context…"></textarea>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;">
+      <div style="flex:1;min-width:140px;">
+        <label class="field-label">Due date</label>
+        <input class="field-input" type="date" id="f-due"/>
+      </div>
+      <div style="flex:1;min-width:140px;">
+        <label class="field-label">Priority</label>
+        <select class="field-input" id="f-priority">
+          <option value="none">No priority</option>
+          <option value="low">🟢 Low</option>
+          <option value="med">🟡 Medium</option>
+          <option value="high">🔴 High</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAGS -->
+  <div class="section">
+    <div class="section-title">🏷 Tags</div>
+    <div class="tags-grid" id="tags-grid"></div>
+  </div>
+
+  <!-- SUBTASKS -->
+  <div class="section">
+    <div class="section-title">📌 Subtasks</div>
+    <div id="subtask-list"></div>
+    <button class="add-row-btn" onclick="addSubRow()">+ Add subtask</button>
+  </div>
+
+  <button class="save-btn" id="save-btn" onclick="saveTask()">💾 Save task</button>
+
+  <!-- AI BATCH -->
+  <div class="ai-batch" style="margin-top:24px;">
+    <div class="ai-batch-title">✨ AI — bulk import</div>
+    <p style="font-size:13px;color:var(--text-soft);margin-bottom:12px;line-height:1.5;">Paste a list of tasks in any format — AI will parse and auto-tag them</p>
+    <textarea id="batch-text" placeholder="For example:
+- Client meeting with John next week
+- Pay internet bill by Friday
+- Prepare strategy session presentation
+- Book doctor appointment
+- Write tech spec for new feature"></textarea>
+    <div style="display:flex;gap:8px;margin-top:10px;">
+      <button class="ai-batch-btn" id="batch-btn" onclick="analyzeBatch()" style="flex:1">✨ Parse and add</button>
+      <label class="ai-batch-btn" style="width:auto;padding:11px 16px;cursor:pointer;background:var(--lavender);display:flex;align-items:center;gap:6px;" title="Upload image instead">
+        📎 Image
+        <input type="file" accept="image/*" style="display:none" onchange="handleBatchImage(this)">
+      </label>
+    </div>
+    <div id="batch-img-preview" style="display:none;margin-top:10px;">
+      <canvas id="batch-canvas" style="max-width:100%;border-radius:10px;border:2px solid var(--lavender);cursor:crosshair;display:block;"></canvas>
+      <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap;">
+        <span style="font-size:11px;color:var(--text-soft);">✏️ Annotate then analyze</span>
+        <button onclick="clearBatchAnnotation()" style="padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);font-size:11px;cursor:pointer;">Clear</button>
+        <button onclick="removeBatchImage()" style="padding:3px 8px;border-radius:6px;border:1px solid var(--red);color:var(--red);background:none;font-size:11px;cursor:pointer;">Remove</button>
+        <input type="range" id="batch-pen-size" min="2" max="16" value="4" style="width:60px;">
+        <input type="color" id="batch-pen-color" value="#e05555" style="width:28px;height:24px;border:none;cursor:pointer;border-radius:4px;">
+        <button onclick="analyzeBatchImage()" style="padding:5px 14px;border-radius:8px;background:var(--slate);color:white;border:none;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">✨ Analyze</button>
+      </div>
+    </div>
+    <div class="ai-results-wrap" id="ai-results-wrap"></div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+import { getFirestore, doc, setDoc, collection } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyD1uWPrp12lvpyBzXCOq9IrMuTU4uOTRao",
+  authDomain: "natas-kitchen.firebaseapp.com",
+  projectId: "natas-kitchen",
+  storageBucket: "natas-kitchen.firebasestorage.app",
+  messagingSenderId: "756908196325",
+  appId: "1:756908196325:web:e8bab3aac2a322f9436f0c"
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const WORK_TAGS = ['dev','strategy','analytics','clients','leads','ux'];
+const PERSONAL_TAGS = ['kids','health','urgent','ideas','money','home','travel','rest','swedish'];
+const TAG_META = {
+  dev:{label:'💻 Dev',group:'work'},strategy:{label:'🎯 Strategy',group:'work'},
+  analytics:{label:'📊 Analytics',group:'work'},clients:{label:'🤝 Clients',group:'work'},
+  leads:{label:'📣 Leads',group:'work'},ux:{label:'🎨 UX',group:'work'},
+  kids:{label:'👶 Kids',group:'personal'},health:{label:'💚 Health',group:'personal'},
+  urgent:{label:'🚨 Urgent',group:'personal'},ideas:{label:'💡 Ideas',group:'personal'},
+  money:{label:'💰 Money',group:'personal'},home:{label:'🏠 Home',group:'personal'},
+  travel:{label:'✈️ Travel',group:'personal'},rest:{label:'🌊 Rest',group:'personal'},
+  swedish:{label:'🇸🇪 Swedish',group:'personal'},
+};
+
+let selectedTags = [];
+let batchResults = [];
+let batchSelected = [];
+
+// ── API KEY ──
+const saved = localStorage.getItem('openai_api_key');
+if (saved) document.getElementById('api-key').value = saved;
+document.getElementById('api-key').addEventListener('change', e => {
+  if (e.target.value.trim()) localStorage.setItem('openai_api_key', e.target.value.trim());
+});
+
+// ── TAGS ──
+function renderTagGrid() {
+  const grid = document.getElementById('tags-grid');
+  grid.innerHTML = `
+    <div>
+      <div class="tag-group-label">💼 Работа</div>
+      <div class="tag-options">
+        ${WORK_TAGS.map(tag => `<button class="tag-opt work${selectedTags.includes(tag)?' sel':''}" onclick="toggleTag('${tag}',this)">${TAG_META[tag].label}</button>`).join('')}
+      </div>
+    </div>
+    <div>
+      <div class="tag-group-label">🌿 Личное</div>
+      <div class="tag-options">
+        ${PERSONAL_TAGS.map(tag => `<button class="tag-opt personal${selectedTags.includes(tag)?' sel':''}" onclick="toggleTag('${tag}',this)">${TAG_META[tag].label}</button>`).join('')}
+      </div>
+    </div>`;
+}
+renderTagGrid();
+
+window.toggleTag = function(tag, el) {
+  const idx = selectedTags.indexOf(tag);
+  if (idx >= 0) { selectedTags.splice(idx, 1); el.classList.remove('sel'); }
+  else { selectedTags.push(tag); el.classList.add('sel'); }
+}
+
+// ── SUBTASKS ──
+window.addSubRow = function(title='') {
+  const list = document.getElementById('subtask-list');
+  const row = document.createElement('div');
+  row.className = 'subtask-row';
+  row.innerHTML = `<input placeholder="Subtask…" value="${escHtml(title)}"/>` +
+    `<button class="sub-del" onclick="this.parentElement.remove()" type="button">×</button>`;
+  list.appendChild(row);
+}
+
+// ── SAVE SINGLE ──
+window.saveTask = async function() {
+  const title = document.getElementById('f-title').value.trim();
+  if (!title) { toast('Enter task title'); return; }
+
+  const subtasks = [...document.querySelectorAll('.subtask-row input')]
+    .map(i => ({title:i.value.trim(),note:'',dueDate:null,status:'new',assigned:''}))
+    .filter(s => s.title);
+
+  const id = 'task-' + Date.now();
+  const task = {
+    id, title,
+    description: document.getElementById('f-desc').value.trim(),
+    dueDate: document.getElementById('f-due').value || null,
+    priority: document.getElementById('f-priority').value,
+    tags: [...selectedTags],
+    status: 'new',
+    subtasks,
+    notes: '',
+    createdAt: new Date().toISOString()
+  };
+
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await setDoc(doc(db, 'tasks', id), task);
+    toast('✅ Task saved!');
+    setTimeout(() => window.location.href = 'index.html', 1200);
+  } catch(e) {
+    btn.disabled = false; btn.textContent = '💾 Save task';
+    toast('❌ Error: ' + e.message);
+  }
+}
+
+// ── AI BATCH ──
+window.analyzeBatch = async function() {
+  const apiKey = document.getElementById('api-key').value.trim() || localStorage.getItem('openai_api_key') || '';
+  if (!apiKey) { toast('Please enter your OpenAI API key ☝️'); return; }
+  const text = document.getElementById('batch-text').value.trim();
+  if (!text) { toast('Paste your task list'); return; }
+
+  const btn = document.getElementById('batch-btn');
+  btn.disabled = true; btn.textContent = '⏳ Анализирую…';
+
+  const systemPrompt = `You are a task management assistant. Parse the task list and return ONLY a valid JSON array, no explanations or markdown.
+
+For each task:
+{
+  "title": "task title in English",
+  "tags": ["tag1", "tag2"],
+  "dueDate": "YYYY-MM-DD или null",
+  "priority": "high|med|low|none",
+  "status": "new"
+}
+
+Доступные теги:
+Работа: dev, strategy, analytics, clients, leads, ux
+Личное: kids, health, urgent, ideas, money, home, travel, rest, swedish
+
+Auto-detect tags from context. Translate any non-English input to English. Today: ${new Date().toISOString().split('T')[0]}.`;
+
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
+      body:JSON.stringify({model:'gpt-4o',max_tokens:2000,messages:[
+        {role:'system',content:systemPrompt},
+        {role:'user',content:'Список дел:\n\n'+text}
+      ]})
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || 'OpenAI error');
+    const raw = data.choices[0].message.content.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'');
+    batchResults = JSON.parse(raw);
+    batchSelected = batchResults.map(() => true);
+    renderBatchResults();
+  } catch(e) {
+    toast('❌ ' + e.message);
+  }
+  btn.disabled = false; btn.textContent = '✨ Parse and add';
+}
+
+function renderBatchResults() {
+  const wrap = document.getElementById('ai-results-wrap');
+  wrap.classList.add('open');
+  wrap.innerHTML = `<div style="font-size:12px;color:var(--text-soft);margin-bottom:8px;">GPT нашёл ${batchResults.length} дел. Выбери что сохранить:</div>` +
+    batchResults.map((t, i) => {
+      const tags = (t.tags||[]).map(tag => {
+        const m = TAG_META[tag];
+        if (!m) return '';
+        return `<span class="ai-tag-chip ${m.group}">${m.label}</span>`;
+      }).join('');
+      return `<div class="ai-task-preview${batchSelected[i]?' selected':''}" id="preview-${i}">
+        <div class="ai-task-check">
+          <div class="ai-checkbox${batchSelected[i]?' checked':''}" onclick="toggleBatchItem(${i})" id="cb-${i}">${batchSelected[i]?'✓':''}</div>
+          <div>
+            <div class="ai-task-name">${escHtml(t.title)}</div>
+            <div class="ai-task-tags">${tags}${t.dueDate?`<span class="ai-tag-chip" style="background:var(--surface2);color:var(--text-soft)">📅 ${t.dueDate}</span>`:''}</div>
+          </div>
+        </div>
+      </div>`;
+    }).join('') +
+    `<div class="batch-actions">
+      <button class="batch-select-all" onclick="toggleSelectAll()">Выбрать все</button>
+      <button class="batch-save-btn" onclick="saveBatch()">💾 Save selected</button>
+    </div>`;
+}
+
+window.toggleBatchItem = function(i) {
+  batchSelected[i] = !batchSelected[i];
+  document.getElementById('cb-' + i).className = 'ai-checkbox' + (batchSelected[i]?' checked':'');
+  document.getElementById('cb-' + i).textContent = batchSelected[i] ? '✓' : '';
+  document.getElementById('preview-' + i).className = 'ai-task-preview' + (batchSelected[i]?' selected':'');
+}
+
+let allSel = true;
+window.toggleSelectAll = function() {
+  allSel = !allSel;
+  batchSelected = batchSelected.map(() => allSel);
+  renderBatchResults();
+}
+
+window.saveBatch = async function() {
+  const toSave = batchResults.filter((_, i) => batchSelected[i]);
+  if (!toSave.length) { toast('Select at least one task'); return; }
+  const saveBtn = document.querySelector('.batch-save-btn');
+  saveBtn.disabled = true; saveBtn.textContent = 'Saving…';
+  try {
+    for (const t of toSave) {
+      const id = 'task-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
+      await setDoc(doc(db, 'tasks', id), {
+        id, title:t.title, description:'', tags:t.tags||[],
+        dueDate:t.dueDate||null, priority:t.priority||'none',
+        status:'new', subtasks:[], notes:'', createdAt:new Date().toISOString()
+      });
+      await new Promise(r => setTimeout(r, 80));
+    }
+    toast(`✅ Saved ${toSave.length} tasks!`);
+    setTimeout(() => window.location.href = 'index.html', 1500);
+  } catch(e) {
+    saveBtn.disabled = false; saveBtn.textContent = '💾 Save selected';
+    toast('❌ ' + e.message);
+  }
+}
+
+
+// ── BATCH IMAGE UPLOAD + ANNOTATION ──
+let batchImgData = null, batchCanvas = null, batchCtx = null, batchDrawing = false;
+window.handleBatchImage = function(input) {
+  const file = input.files[0]; if(!file) return; input.value='';
+  const reader = new FileReader();
+  reader.onload = e => {
+    const dataUrl = e.target.result;
+    batchImgData = {base64: dataUrl.split(',')[1], mediaType: file.type||'image/jpeg', dataUrl};
+    const wrap = document.getElementById('batch-img-preview');
+    wrap.style.display='block';
+    batchCanvas = document.getElementById('batch-canvas');
+    batchCtx = batchCanvas.getContext('2d');
+    const img = new Image();
+    img.onload = () => {
+      const maxW = wrap.clientWidth-8;
+      const scale = Math.min(1, maxW/img.width);
+      batchCanvas.width=img.width*scale; batchCanvas.height=img.height*scale;
+      batchCtx.drawImage(img,0,0,batchCanvas.width,batchCanvas.height);
+    };
+    img.src = dataUrl;
+    batchCanvas.onmousedown = e2=>{batchDrawing=true;batchCtx.beginPath();batchCtx.moveTo(...bPos(e2));};
+    batchCanvas.onmousemove = e2=>{if(!batchDrawing)return;batchCtx.lineTo(...bPos(e2));batchCtx.strokeStyle=document.getElementById('batch-pen-color').value;batchCtx.lineWidth=document.getElementById('batch-pen-size').value;batchCtx.lineCap='round';batchCtx.stroke();};
+    batchCanvas.onmouseup = batchCanvas.onmouseleave = ()=>batchDrawing=false;
+    batchCanvas.ontouchstart=e2=>{e2.preventDefault();batchDrawing=true;batchCtx.beginPath();batchCtx.moveTo(...bPos(e2.touches[0]));};
+    batchCanvas.ontouchmove=e2=>{e2.preventDefault();if(!batchDrawing)return;batchCtx.lineTo(...bPos(e2.touches[0]));batchCtx.strokeStyle=document.getElementById('batch-pen-color').value;batchCtx.lineWidth=document.getElementById('batch-pen-size').value;batchCtx.lineCap='round';batchCtx.stroke();};
+    batchCanvas.ontouchend=()=>batchDrawing=false;
+  };
+  reader.readAsDataURL(file);
+};
+function bPos(e){const r=batchCanvas.getBoundingClientRect();return[e.clientX-r.left,e.clientY-r.top];}
+window.clearBatchAnnotation = function(){if(!batchCanvas||!batchImgData)return;const img=new Image();img.onload=()=>batchCtx.drawImage(img,0,0,batchCanvas.width,batchCanvas.height);img.src=batchImgData.dataUrl;};
+window.removeBatchImage = function(){batchImgData=null;batchCanvas=null;document.getElementById('batch-img-preview').style.display='none';};
+window.analyzeBatchImage = async function(){
+  const apiKey = document.getElementById('api-key').value.trim()||localStorage.getItem('openai_api_key')||'';
+  if(!apiKey){toast('Enter OpenAI API key ☝️');return;}
+  if(!batchCanvas){toast('No image loaded');return;}
+  const dataUrl=batchCanvas.toDataURL('image/jpeg',0.85);
+  const base64=dataUrl.split(',')[1];
+  const btn=document.getElementById('batch-btn');
+  btn.textContent='⏳ Analyzing image…';
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
+      body:JSON.stringify({model:'gpt-4o',max_tokens:1500,messages:[
+        {role:'system',content:'You are a task extraction assistant. Extract all tasks, to-dos, action items from images (handwriting, screenshots, notes). Return ONLY a JSON array, no markdown: [{"title":"...","tags":[],"dueDate":null,"priority":"none","status":"new"}]. Translate everything to English.'},
+        {role:'user',content:[
+          {type:'image_url',image_url:{url:`data:image/jpeg;base64,${base64}`,detail:'high'}},
+          {type:'text',text:'Extract all tasks and action items from this image as a JSON array.'}
+        ]}
+      ]})
+    });
+    const data=await res.json();
+    if(!res.ok) throw new Error(data.error?.message||'OpenAI error');
+    const raw=data.choices[0].message.content.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'');
+    batchResults=JSON.parse(raw);
+    batchSelected=batchResults.map(()=>true);
+    renderBatchResults();
+    removeBatchImage();
+  } catch(e){toast('❌ '+e.message);}
+  btn.textContent='✨ Parse and add';
+};
+
+function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>

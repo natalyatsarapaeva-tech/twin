@@ -125,6 +125,7 @@
     .fab:active{transform:scale(.92);}
     .fab-ai{width:46px;height:46px;background:var(--lavender);font-size:20px;}
     .fab-map{width:46px;height:46px;background:var(--blue-light);font-size:20px;}
+    .fab-ctx{width:46px;height:46px;background:var(--lav-pale);font-size:20px;color:var(--lavender);}
 
     /* ── ANIM ── */
     .fade-in{animation:fadeIn .3s ease both;}
@@ -264,6 +265,7 @@
 
   <div class="fab-group">
     <a class="fab fab-map" href="mindmap.html" title="Mind map">🗺️</a>
+    <a class="fab fab-ctx" href="context.html" title="Wide context">🧠</a>
     <button class="fab fab-ai" onclick="openChat()" title="AI chat">✨</button>
     <a class="fab" href="add-task.html" title="New task">+</a>
   </div>
@@ -302,7 +304,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+import { getFirestore, collection, getDocs, doc, getDoc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
 
 // ══ FIREBASE CONFIG — замени на свой проект ══
 const firebaseConfig = {
@@ -362,6 +364,7 @@ async function loadTasks() {
   }
 }
 loadTasks();
+loadWideContext();
 
 // ── HEADER STATS ──
 function updateHeaderStats() {
@@ -458,7 +461,7 @@ window.renderCards = function() {
         <div class="card-title${done?' done-text':''}">${escHtml(t.title)}</div>
         <div class="card-meta-row">
           <span class="card-due ${dueClass}">${dueText}</span>
-          ${subtasks.length ? `<span class="card-subtasks">📌 ${doneCount}/${subtasks.length} подзадач</span>` : ''}
+          ${subtasks.length ? `<span class="card-subtasks">📌 ${doneCount}/${subtasks.length} subtasks</span>` : ''}
         </div>
         ${tags ? `<div class="card-tag-list">${tags}</div>` : ''}
       </div>
@@ -508,281 +511,423 @@ window.clearSearch = function() {
 }
 
 // ══════════════════════════════════════════════
-// AI CHAT — итерация 2
-// • Умный контекст по тегу (п.5 ТЗ)
-// • Распознавание темы запроса (п.7 ТЗ)
-// • Полный CRUD из чата: create / update / delete / add_subtask / update_subtask
+// AI CHAT — iteration 3a
+// • Wide context [A]: user profile + chat summary
+// • Tag context [B]: tag profile + taskSummary + chatSummary
+// • Selective task dump [C]: high/med full, low/done titles only
+// • Background [D]: top-10 high priority other tags
+// • Classifier runs silently — no intermediate UI state
+// • Auto chat-summary on close (≥4 user messages)
+// • doneAt written on status→done
 // ══════════════════════════════════════════════
 let chatHistory = [];
+let chatUserMessageCount = 0;
+let lastDetectedTags = [];
+let wideContext = {profile:'', chatSummary:''};
+let tagContextCache = {};
+
+// Load user-level wide context (called once after tasks load)
+async function loadWideContext() {
+  try {
+    const snap = await getDoc(doc(db, 'contexts', 'user'));
+    if (snap.exists()) wideContext = snap.data();
+  } catch(e) {}
+}
+
+// Load tag context (cached per session)
+async function loadTagContext(tagId) {
+  if (tagContextCache[tagId]) return tagContextCache[tagId];
+  try {
+    const snap = await getDoc(doc(db, 'contexts', 'tag-' + tagId));
+    tagContextCache[tagId] = snap.exists() ? snap.data() : {};
+  } catch(e) { tagContextCache[tagId] = {}; }
+  return tagContextCache[tagId];
+}
 
 window.openChat = function() {
   document.getElementById('chat-overlay').style.display = 'block';
   setTimeout(() => document.getElementById('chat-drawer').classList.add('open'), 10);
   document.getElementById('chat-input').focus();
+  chatUserMessageCount = 0;
+  lastDetectedTags = [];
 }
 
-window.closeChat = function() {
+window.closeChat = async function() {
   document.getElementById('chat-drawer').classList.remove('open');
   setTimeout(() => document.getElementById('chat-overlay').style.display = 'none', 350);
+  if (chatUserMessageCount >= 4) {
+    autoSummariseChat(); // fire-and-forget
+  }
 }
 
 window.chatKeydown = function(e) {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
 }
 
-// ── ШАБЛОН СИСТЕМНОГО ПРОМПТА ──
-// Called with already-filtered context tasks
-function buildSystemPrompt(contextTasks, detectedTopic) {
+// ── [A+B+C+D] SYSTEM PROMPT BUILDER ──
+async function buildRichSystemPrompt(relevantTags, contextTasks, topic) {
   const today = todayStr();
+  const thirtyDaysAgo = new Date(Date.now() - 30*24*60*60*1000).toISOString().split('T')[0];
 
-  // Full dump of each task with subtasks
-  const taskDump = contextTasks.map(t => {
-    const subs = (t.subtasks||[]).map((s,i) =>
-      `    ${i+1}. [${s.status||'new'}] ${s.title}${s.note?' | заметка: '+s.note:''}${s.dueDate?' | срок: '+s.dueDate:''}${s.assigned?' | assigned: '+s.assigned:''}`
-    ).join('\n');
-    return `---
+  // [A] User wide context
+  const sectionA = `═══ [A] ABOUT YOU ═══
+${wideContext.profile || '(no profile set — user can add it in Context page)'}
+
+RECENT CONVERSATION HISTORY:
+${wideContext.chatSummary ? wideContext.chatSummary.slice(-800) : '(none yet)'}`;
+
+  // [B] Tag context(s)
+  let sectionB = '';
+  if (relevantTags.length) {
+    const tagCtxParts = [];
+    for (const tagId of relevantTags) {
+      const ctx = await loadTagContext(tagId);
+      const tagLabel = TAG_META[tagId]?.label || tagId;
+      if (ctx.profile || ctx.taskSummary || ctx.chatSummary) {
+        tagCtxParts.push(`--- ${tagLabel} ---
+${ctx.profile ? 'Area description: ' + ctx.profile : ''}
+${ctx.taskSummary ? 'Task summary: ' + ctx.taskSummary : ''}
+${ctx.chatSummary ? 'Recent chats: ' + ctx.chatSummary.slice(-400) : ''}`);
+      }
+    }
+    if (tagCtxParts.length) {
+      sectionB = `\n═══ [B] TAG CONTEXT ═══\n${tagCtxParts.join('\n')}`;
+    }
+  }
+
+  // [C] Selective task dump for relevant tags
+  let sectionC = '';
+  if (contextTasks.length) {
+    const fullDump = contextTasks
+      .filter(t => {
+        // Include done only if doneAt within 30 days (fallback: createdAt)
+        if (t.status === 'done') {
+          const doneDate = t.doneAt ? t.doneAt.split('T')[0] : (t.createdAt ? t.createdAt.split('T')[0] : '');
+          return doneDate >= thirtyDaysAgo;
+        }
+        return true;
+      })
+      .map(t => {
+        const priority = t.priority || 'none';
+        // Low priority and done → compact format
+        if (priority === 'low' || t.status === 'done') {
+          return `[${t.id}] ${t.title} | ${t.status} | due:${t.dueDate||'–'}`;
+        }
+        // High/med → full dump
+        const subs = (t.subtasks||[]).map((s,i) =>
+          `    ${i}. [${s.status||'new'}] ${s.title}${s.note?' | '+s.note:''}${s.dueDate?' | due:'+s.dueDate:''}${s.assigned?' | @'+s.assigned:''}`
+        ).join('\n');
+        const overdueMark = (t.dueDate && t.dueDate < today) ? ' ⚠️OVERDUE' : '';
+        return `---
 ID: ${t.id}
-Название: ${t.title}
-Статус: ${t.status||'new'} | Приоритет: ${t.priority||'none'} | Срок: ${t.dueDate||'нет'}
-Теги: ${(t.tags||[]).join(', ')||'нет'}
-Заметки: ${t.notes||'нет'}
-Подзадачи (${(t.subtasks||[]).length}):
-${subs||'    нет'}`;
-  }).join('\n');
+Title: ${t.title}${overdueMark}
+Status: ${t.status||'new'} | Priority: ${priority} | Due: ${t.dueDate||'none'}
+Tags: ${(t.tags||[]).join(', ')||'none'}
+Notes: ${t.notes||'none'}
+Subtasks (${(t.subtasks||[]).length}):
+${subs||'    none'}`;
+      }).join('\n');
 
-  return `You are a personal AI task management assistant. Today: ${today}. Always respond in English, concisely and to the point. All task titles, descriptions, subtasks, and notes you create must be in English regardless of input language.
+    sectionC = `\n═══ [C] TASKS IN THIS AREA ═══\n${fullDump}`;
+  }
 
-${detectedTopic ? `REQUEST TOPIC: ${detectedTopic}` : ''}
+  // [D] Background: top-10 high priority tasks from OTHER tags
+  const bgTasks = allTasks
+    .filter(t => t.status !== 'done' && t.priority === 'high' &&
+      !(t.tags||[]).some(tag => relevantTags.includes(tag)))
+    .slice(0, 10)
+    .map(t => `[${t.id}] ${t.title} | due:${t.dueDate||'–'} | tags:${(t.tags||[]).join(',')}`)
+    .join('\n');
+  const sectionD = bgTasks ? `\n═══ [D] OTHER HIGH PRIORITY TASKS ═══\n${bgTasks}` : '';
 
-CONTEXT — CURRENT TASKS:
-${taskDump || 'No tasks'}
+  return `You are a personal AI task management assistant. Today: ${today}.
+Always respond in English. All content you create must be in English regardless of input language.
+${topic ? `Current topic: ${topic}` : ''}
+${sectionA}${sectionB}${sectionC}${sectionD}
 
 ═══ AVAILABLE ACTIONS ═══
-You can perform task actions. When needed, return a JSON block at the end of your response.
-Each JSON block = ONE action. Multiple blocks allowed.
+Return JSON blocks at the end of your response when taking action.
 
 1. CREATE TASK:
 {"action":"create_task","task":{"title":"...","description":"...","tags":["tag"],"dueDate":"YYYY-MM-DD or null","priority":"high|med|low|none","status":"new","subtasks":[]}}
 
-2. UPDATE TASK (only changed fields):
+2. UPDATE TASK (changed fields only):
 {"action":"update_task","taskId":"ID_from_context","fields":{"title":"...","dueDate":"...","priority":"...","status":"...","notes":"..."}}
 
 3. DELETE TASK:
 {"action":"delete_task","taskId":"ID_from_context","confirm":true}
 
-4. ADD SUBTASK to an existing task:
+4. ADD SUBTASK:
 {"action":"add_subtask","taskId":"ID_from_context","subtask":{"title":"...","note":"...","dueDate":"YYYY-MM-DD or null","status":"new","assigned":""}}
 
 5. UPDATE SUBTASK:
 {"action":"update_subtask","taskId":"ID_from_context","subtaskIndex":0,"fields":{"title":"...","status":"...","dueDate":"...","note":"...","assigned":"..."}}
 
-Поддерживаемые теги: dev, strategy, analytics, clients, leads, ux, kids, health, urgent, ideas, money, home, travel, rest, swedish
+Supported tags: dev, strategy, analytics, clients, leads, ux, kids, health, urgent, ideas, money, home, travel, rest, swedish
 
 RULES:
-- Before deleting — confirm with user unless explicitly requested
-- Use real IDs from the context above
-- If user asks about something not in context — say so
-- Text response first, then JSON block(s)`;
+- Confirm before deleting unless explicitly asked
+- Use real IDs from context above
+- Text response first, JSON action blocks after`;
 }
 
-// ── ОПРЕДЕЛЕНИЕ ТЕМЫ ЗАПРОСА ──
-// Два шага: сначала быстрый классификатор, потом основной вызов с полным контекстом
-async function detectTopicAndGetContext(userMessage, apiKey) {
-  // Быстрый список всех дел для классификатора (только заголовки + теги)
+// ── CLASSIFIER (silent) ──
+async function classifyAndGetContext(userMessage, apiKey) {
   const quickList = allTasks.map(t =>
-    `[${t.id}] ${t.title} | теги: ${(t.tags||[]).join(',')}`
+    `[${t.id}] ${t.title} | tags:${(t.tags||[]).join(',')}`
   ).join('\n');
 
-  const classifierPrompt = `The user has a task list. Identify the REQUEST TOPIC and return JSON.
-
-TASK LIST:
+  const prompt = `Task list:
 ${quickList}
 
-USER REQUEST: "${userMessage}"
+User message: "${userMessage}"
 
-Return ONLY JSON, no explanations:
+Return ONLY JSON:
 {
-  "topic": "brief topic description in English (or null if general question)",
+  "topic": "brief topic in English or null",
   "relevantTags": ["tag1","tag2"],
   "relevantTaskIds": ["id1","id2"],
-  "intent": "query|create|update|delete|add_subtask|mixed"
+  "isGeneral": true/false
 }
 
-Теги: dev, strategy, analytics, clients, leads, ux, kids, health, urgent, ideas, money, home, travel, rest, swedish`;
+Tags: dev,strategy,analytics,clients,leads,ux,kids,health,urgent,ideas,money,home,travel,rest,swedish
+isGeneral=true if the question is intentionally broad (e.g. "what should I do today?")`;
 
   try {
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        max_tokens: 300,
-        temperature: 0,
-        messages: [{role:'user', content: classifierPrompt}]
-      })
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
+      body:JSON.stringify({model:'gpt-4o',max_tokens:250,temperature:0,
+        messages:[{role:'user',content:prompt}]})
     });
     const data = await res.json();
     const raw = data.choices[0].message.content.trim()
       .replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'');
-    const classified = JSON.parse(raw);
+    const c = JSON.parse(raw);
 
-    // Collect context tasks by topic
-    let contextTasks = [];
-    const tagSet = new Set(classified.relevantTags || []);
-    const idSet = new Set(classified.relevantTaskIds || []);
+    const tagSet = new Set(c.relevantTags || []);
+    const idSet  = new Set(c.relevantTaskIds || []);
 
-    // Дела по совпадающим тегам
-    allTasks.forEach(t => {
-      const haTag = (t.tags||[]).some(tag => tagSet.has(tag));
-      const hasId = idSet.has(t.id);
-      if (haTag || hasId) contextTasks.push(t);
-    });
+    let contextTasks = allTasks.filter(t =>
+      (t.tags||[]).some(tag => tagSet.has(tag)) || idSet.has(t.id)
+    );
 
-    // Если тема не определена или дел по теме нет — берём все активные (до 15)
+    // Fallback logic
     if (!contextTasks.length) {
-      contextTasks = allTasks.filter(t => t.status !== 'done').slice(0, 15);
+      if (c.isGeneral) {
+        // Intentionally broad — high priority active tasks
+        contextTasks = allTasks
+          .filter(t => t.status !== 'done' && (t.priority === 'high' || t.priority === 'med'))
+          .slice(0, 15);
+      } else {
+        // Classifier missed — high priority fallback
+        contextTasks = allTasks
+          .filter(t => t.status !== 'done' && t.priority === 'high')
+          .slice(0, 15);
+      }
     }
 
-    return { contextTasks, topic: classified.topic, intent: classified.intent };
+    lastDetectedTags = [...tagSet];
+    return { relevantTags: [...tagSet], contextTasks, topic: c.topic };
   } catch(e) {
-    // Fallback — all active tasks
+    // Hard fallback
     return {
-      contextTasks: allTasks.filter(t => t.status !== 'done').slice(0, 15),
-      topic: null,
-      intent: 'query'
+      relevantTags: [],
+      contextTasks: allTasks.filter(t => t.status !== 'done' && t.priority === 'high').slice(0,15),
+      topic: null
     };
   }
 }
 
-// ── ПАРСЕР И ИСПОЛНИТЕЛЬ ACTIONS ──
-async function parseAndExecuteActions(reply) {
-  // Ищем все JSON-блоки с "action" в ответе
-  const jsonBlocks = [];
-  const pattern = /\{[\s\S]*?"action"\s*:\s*"[\s\S]*?\}(?=\s*(\n\{|\n[^{]|$))/g;
+// ── AUTO CHAT SUMMARY ──
+async function autoSummariseChat() {
+  const apiKey = localStorage.getItem('openai_api_key');
+  if (!apiKey || chatHistory.length < 6) return;
 
-  // Более надёжный подход — ищем блоки от { до сбалансированной }
+  const historyText = chatHistory
+    .filter(m => typeof m.content === 'string') // skip image messages
+    .map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content}`)
+    .join('\n');
+
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
+      body:JSON.stringify({model:'gpt-4o',max_tokens:200,temperature:0.3,messages:[
+        {role:'system',content:'Summarise this AI conversation in 3-5 lines: what was discussed, what was decided or created, any important context. Be specific and factual. English only.'},
+        {role:'user',content:historyText}
+      ]})
+    });
+    const data = await res.json();
+    const summary = data.choices[0].message.content.trim();
+    const dateLine = `\n[${new Date().toLocaleDateString('en-GB')}] ${summary}`;
+
+    // Append to user context (keep last ~800 words)
+    const existing = wideContext.chatSummary || '';
+    const combined = (existing + dateLine).slice(-3200); // ~800 words
+    wideContext.chatSummary = combined;
+    await setDoc(doc(db, 'contexts', 'user'),
+      {chatSummary: combined, updatedAt: new Date().toISOString()}, {merge:true});
+
+    // Also save to tag-specific contexts if tags were detected
+    for (const tagId of lastDetectedTags) {
+      const tagCtx = tagContextCache[tagId] || {};
+      const tagExisting = tagCtx.chatSummary || '';
+      const tagCombined = (tagExisting + dateLine).slice(-3200);
+      tagContextCache[tagId] = {...tagCtx, chatSummary: tagCombined};
+      await setDoc(doc(db, 'contexts', 'tag-' + tagId),
+        {chatSummary: tagCombined, updatedAt: new Date().toISOString()}, {merge:true});
+    }
+  } catch(e) { /* silent fail — summary is nice-to-have */ }
+}
+
+// ── TASK SUMMARY FOR TAG (called after save, fire-and-forget) ──
+async function updateTagTaskSummary(tags) {
+  const apiKey = localStorage.getItem('openai_api_key');
+  if (!apiKey || !tags || !tags.length) return;
+
+  for (const tagId of tags) {
+    const tagTasks = allTasks.filter(t => (t.tags||[]).includes(tagId));
+    if (!tagTasks.length) continue;
+
+    const taskList = tagTasks.map(t =>
+      `[${t.status}] ${t.title}${t.notes?' | '+t.notes.slice(0,80):''}${(t.subtasks||[]).length?' | '+t.subtasks.length+' subtasks':''}`
+    ).join('\n');
+
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
+        body:JSON.stringify({model:'gpt-4o',max_tokens:200,temperature:0.3,messages:[
+          {role:'system',content:'Write a 3-5 sentence project summary for an AI assistant. Cover: what this area is about, current status, main open items, recently completed work. Be specific and factual. English only.'},
+          {role:'user',content:`Area: ${TAG_META[tagId]?.label || tagId}\n\nTasks:\n${taskList}`}
+        ]})
+      });
+      const data = await res.json();
+      const summary = data.choices[0].message.content.trim();
+
+      // Update cache and Firebase
+      tagContextCache[tagId] = {...(tagContextCache[tagId]||{}), taskSummary: summary, summaryUpdatedAt: new Date().toISOString()};
+      await setDoc(doc(db, 'contexts', 'tag-' + tagId),
+        {taskSummary: summary, summaryUpdatedAt: new Date().toISOString()}, {merge:true});
+    } catch(e) { /* silent */ }
+  }
+}
+
+// ── ACTION PARSER & EXECUTOR ──
+async function parseAndExecuteActions(reply) {
+  const jsonBlocks = [];
   let i = 0;
   while (i < reply.length) {
     const start = reply.indexOf('{"action"', i);
     if (start === -1) break;
-    let depth = 0, j = start, inStr = false, escape = false;
+    let depth=0, j=start, inStr=false, escape=false;
     while (j < reply.length) {
       const ch = reply[j];
-      if (escape) { escape = false; j++; continue; }
-      if (ch === '\\' && inStr) { escape = true; j++; continue; }
-      if (ch === '"') inStr = !inStr;
+      if (escape) { escape=false; j++; continue; }
+      if (ch==='\\' && inStr) { escape=true; j++; continue; }
+      if (ch==='"') inStr=!inStr;
       if (!inStr) {
-        if (ch === '{') depth++;
-        if (ch === '}') { depth--; if (depth === 0) { jsonBlocks.push(reply.slice(start, j+1)); i = j+1; break; } }
+        if (ch==='{') depth++;
+        if (ch==='}') { depth--; if(depth===0){jsonBlocks.push(reply.slice(start,j+1));i=j+1;break;} }
       }
       j++;
     }
-    if (j >= reply.length) break;
+    if (j>=reply.length) break;
   }
-
-  if (!jsonBlocks.length) return { actions: [], messages: [] };
+  if (!jsonBlocks.length) return {actions:[], cleanReply:reply};
 
   const results = [];
   for (const block of jsonBlocks) {
-    try {
-      const action = JSON.parse(block);
-      const result = await executeAction(action);
-      results.push(result);
-    } catch(e) {
-      results.push({ ok: false, msg: 'JSON parse error: ' + e.message });
-    }
+    try { results.push(await executeAction(JSON.parse(block))); }
+    catch(e) { results.push({ok:false, msg:'JSON parse error: '+e.message}); }
   }
-
-  // Чистый текст ответа без JSON-блоков
   let cleanReply = reply;
-  jsonBlocks.forEach(b => { cleanReply = cleanReply.replace(b, '').trim(); });
-
-  return { actions: results, cleanReply };
+  jsonBlocks.forEach(b => { cleanReply = cleanReply.replace(b,'').trim(); });
+  return {actions: results, cleanReply};
 }
 
 async function executeAction(action) {
-  switch (action.action) {
-
+  switch(action.action) {
     case 'create_task': {
-      const id = 'task-' + Date.now() + '-' + Math.random().toString(36).slice(2,5);
+      const id = 'task-'+Date.now()+'-'+Math.random().toString(36).slice(2,5);
       const task = {
         id,
-        title: action.task.title || 'Untitled',
-        description: action.task.description || '',
-        tags: action.task.tags || [],
-        dueDate: action.task.dueDate || null,
-        priority: action.task.priority || 'none',
+        title: action.task.title||'Untitled',
+        description: action.task.description||'',
+        tags: action.task.tags||[],
+        dueDate: action.task.dueDate||null,
+        priority: action.task.priority||'none',
         status: 'new',
-        subtasks: (action.task.subtasks || []).map(s => ({
-          title: s.title||'', note: s.note||'', dueDate: s.dueDate||null,
-          status: 'new', assigned: s.assigned||'', createdAt: new Date().toISOString()
+        subtasks: (action.task.subtasks||[]).map(s=>({
+          title:s.title||'',note:s.note||'',dueDate:s.dueDate||null,
+          status:'new',assigned:s.assigned||'',createdAt:new Date().toISOString()
         })),
-        notes: '',
-        createdAt: new Date().toISOString()
+        notes:'', createdAt:new Date().toISOString()
       };
-      await setDoc(doc(db, 'tasks', id), task);
+      await setDoc(doc(db,'tasks',id), task);
       allTasks.push(task);
       renderCards(); updateHeaderStats();
-      return { ok: true, msg: `✅ Task created: "${task.title}"` };
+      // Update tag summaries in background
+      if (task.tags.length) updateTagTaskSummary(task.tags);
+      return {ok:true, msg:`✅ Created: "${task.title}"`};
     }
-
     case 'update_task': {
-      const idx = allTasks.findIndex(t => t.id === action.taskId);
-      if (idx === -1) return { ok: false, msg: `❌ Task with ID ${action.taskId} not found` };
-      const updated = { ...allTasks[idx], ...action.fields };
-      await setDoc(doc(db, 'tasks', action.taskId), updated);
+      const idx = allTasks.findIndex(t=>t.id===action.taskId);
+      if (idx===-1) return {ok:false, msg:`❌ Task ${action.taskId} not found`};
+      // Track doneAt
+      if (action.fields.status === 'done' && allTasks[idx].status !== 'done') {
+        action.fields.doneAt = new Date().toISOString();
+      }
+      const updated = {...allTasks[idx], ...action.fields};
+      await setDoc(doc(db,'tasks',action.taskId), updated);
       allTasks[idx] = updated;
       renderCards(); updateHeaderStats();
-      return { ok: true, msg: `✅ Task updated: "${updated.title}"` };
+      if (updated.tags.length) updateTagTaskSummary(updated.tags);
+      return {ok:true, msg:`✅ Updated: "${updated.title}"`};
     }
-
     case 'delete_task': {
-      if (!action.confirm) return { ok: false, msg: '⚠️ Deletion not confirmed' };
-      const idx = allTasks.findIndex(t => t.id === action.taskId);
-      if (idx === -1) return { ok: false, msg: `❌ Task with ID ${action.taskId} not found` };
+      if (!action.confirm) return {ok:false, msg:'⚠️ Deletion not confirmed'};
+      const idx = allTasks.findIndex(t=>t.id===action.taskId);
+      if (idx===-1) return {ok:false, msg:`❌ Task ${action.taskId} not found`};
       const title = allTasks[idx].title;
-      await deleteDoc(doc(db, 'tasks', action.taskId));
-      allTasks.splice(idx, 1);
+      await deleteDoc(doc(db,'tasks',action.taskId));
+      allTasks.splice(idx,1);
       renderCards(); updateHeaderStats();
-      return { ok: true, msg: `🗑 Task deleted: "${title}"` };
+      return {ok:true, msg:`🗑 Deleted: "${title}"`};
     }
-
     case 'add_subtask': {
-      const idx = allTasks.findIndex(t => t.id === action.taskId);
-      if (idx === -1) return { ok: false, msg: `❌ Task with ID ${action.taskId} not found` };
+      const idx = allTasks.findIndex(t=>t.id===action.taskId);
+      if (idx===-1) return {ok:false, msg:`❌ Task ${action.taskId} not found`};
       const sub = {
-        title: action.subtask.title || '',
-        note: action.subtask.note || '',
-        dueDate: action.subtask.dueDate || null,
-        status: action.subtask.status || 'new',
-        assigned: action.subtask.assigned || '',
-        createdAt: new Date().toISOString()
+        title:action.subtask.title||'',note:action.subtask.note||'',
+        dueDate:action.subtask.dueDate||null,status:action.subtask.status||'new',
+        assigned:action.subtask.assigned||'',createdAt:new Date().toISOString()
       };
       allTasks[idx].subtasks = [...(allTasks[idx].subtasks||[]), sub];
-      await setDoc(doc(db, 'tasks', action.taskId), allTasks[idx]);
+      await setDoc(doc(db,'tasks',action.taskId), allTasks[idx]);
+      if (allTasks[idx].tags.length) updateTagTaskSummary(allTasks[idx].tags);
       renderCards();
-      return { ok: true, msg: `✅ Subtask added: "${sub.title}" → "${allTasks[idx].title}"` };
+      return {ok:true, msg:`✅ Subtask added → "${allTasks[idx].title}"`};
     }
-
     case 'update_subtask': {
-      const idx = allTasks.findIndex(t => t.id === action.taskId);
-      if (idx === -1) return { ok: false, msg: `❌ Task with ID ${action.taskId} not found` };
+      const idx = allTasks.findIndex(t=>t.id===action.taskId);
+      if (idx===-1) return {ok:false, msg:`❌ Task ${action.taskId} not found`};
       const subs = [...(allTasks[idx].subtasks||[])];
       const si = action.subtaskIndex;
-      if (si < 0 || si >= subs.length) return { ok: false, msg: `❌ Subtask at index ${si} not found` };
-      subs[si] = { ...subs[si], ...action.fields };
+      if (si<0||si>=subs.length) return {ok:false, msg:`❌ Subtask ${si} not found`};
+      subs[si] = {...subs[si],...action.fields};
       allTasks[idx].subtasks = subs;
-      await setDoc(doc(db, 'tasks', action.taskId), allTasks[idx]);
+      await setDoc(doc(db,'tasks',action.taskId), allTasks[idx]);
       renderCards();
-      return { ok: true, msg: `✅ Подзадача обновлена` };
+      return {ok:true, msg:'✅ Subtask updated'};
     }
-
     default:
-      return { ok: false, msg: `⚠️ Unknown action: ${action.action}` };
+      return {ok:false, msg:`⚠️ Unknown action: ${action.action}`};
   }
 }
 
-// ── ГЛАВНАЯ ФУНКЦИЯ ОТПРАВКИ ──
+// ── MAIN SEND FUNCTION ──
 window.sendChatMessage = async function() {
   const apiKey = localStorage.getItem('openai_api_key');
   if (!apiKey) {
@@ -795,112 +940,77 @@ window.sendChatMessage = async function() {
   if (!text && !imgPayload) return;
 
   input.value = '';
-  // Show user bubble with image preview
   const userBubbleId = addChatBubble('user', text || '📎 [image]');
   if (imgPayload) {
-    const msgs = document.getElementById('chat-messages');
     const thumb = document.createElement('img');
-    thumb.src = 'data:' + imgPayload.mediaType + ';base64,' + imgPayload.base64;
+    thumb.src = 'data:'+imgPayload.mediaType+';base64,'+imgPayload.base64;
     thumb.style.cssText = 'max-width:180px;border-radius:8px;margin-top:6px;display:block;';
     document.getElementById(userBubbleId)?.appendChild(thumb);
   }
-
-  // Build message content
-  let userContent;
-  if (imgPayload) {
-    userContent = [
-      { type: 'image_url', image_url: { url: 'data:' + imgPayload.mediaType + ';base64,' + imgPayload.base64, detail: 'high' } },
-      { type: 'text', text: text || 'Please read this image and extract any tasks, notes, or actions from it.' }
-    ];
-  } else {
-    userContent = text;
-  }
-  chatHistory.push({ role: 'user', content: userContent });
-  // Clear image after send
+  let userContent = imgPayload
+    ? [{type:'image_url',image_url:{url:'data:'+imgPayload.mediaType+';base64,'+imgPayload.base64,detail:'high'}},
+       {type:'text',text:text||'Extract any tasks, notes, or actions from this image.'}]
+    : text;
+  chatHistory.push({role:'user',content:userContent});
+  chatUserMessageCount++;
   removeImage();
 
   const sendBtn = document.getElementById('chat-send');
   sendBtn.disabled = true;
-  const loadingId = addChatBubble('ai', '🔍 Identifying topic…', true);
+  const loadingId = addChatBubble('ai','⏳ Thinking…',true);
 
   try {
-    // ШАГ 1: Классификатор — определяем тему и релевантный контекст
-    updateBubble(loadingId, '🔍 Identifying topic…');
-    const { contextTasks, topic, intent } = await detectTopicAndGetContext(text, apiKey);
+    // Step 1: Classify silently
+    const {relevantTags, contextTasks, topic} = await classifyAndGetContext(text||'image input', apiKey);
 
-    // ШАГ 2: Показываем пользователю что нашли
-    if (topic) updateBubble(loadingId, `📂 Тема: ${topic} · ${contextTasks.length} дел в контексте…`);
-    else updateBubble(loadingId, `💭 Думаю… ${contextTasks.length} дел в контексте`);
+    // Step 2: Build rich prompt with all context layers
+    updateBubble(loadingId, '⏳ Thinking…');
+    const systemPrompt = await buildRichSystemPrompt(relevantTags, contextTasks, topic);
 
-    // ШАГ 3: Основной вызов с полным контекстом по теме
-    const systemPrompt = buildSystemPrompt(contextTasks, topic);
+    // Step 3: Main call
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        max_tokens: 1200,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          ...chatHistory
-        ]
-      })
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
+      body:JSON.stringify({model:'gpt-4o',max_tokens:1200,
+        messages:[{role:'system',content:systemPrompt},...chatHistory]})
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message || 'OpenAI error');
+    if (!res.ok) throw new Error(data.error?.message||'OpenAI error');
 
     const reply = data.choices[0].message.content;
-    chatHistory.push({ role: 'assistant', content: reply });
+    chatHistory.push({role:'assistant',content:reply});
 
-    // ШАГ 4: Парсим и исполняем actions
-    const { actions, cleanReply } = await parseAndExecuteActions(reply);
-
-    // ШАГ 5: Формируем финальный ответ
+    // Step 4: Execute actions
+    const {actions, cleanReply} = await parseAndExecuteActions(reply);
     removeBubble(loadingId);
-
-    const displayText = cleanReply || '';
-    if (displayText) addChatBubble('ai', displayText);
-
-    // Показываем результаты действий отдельными чипами
+    if (cleanReply) addChatBubble('ai', cleanReply);
     if (actions.length) {
-      const statusLine = actions.map(a => a.msg).join('\n');
-      addChatBubble('ai-action', statusLine);
+      addChatBubble('ai-action', actions.map(a=>a.msg).join('\n'));
     }
-
   } catch(e) {
     removeBubble(loadingId);
-    addChatBubble('ai', '❌ Error: ' + e.message);
+    addChatBubble('ai','❌ Error: '+e.message);
   }
-
   sendBtn.disabled = false;
 }
 
 // ── UI HELPERS ──
 function addChatBubble(role, text, isLoading=false) {
-  const id = 'bubble-' + Date.now() + '-' + Math.random().toString(36).slice(2,5);
+  const id = 'bubble-'+Date.now()+'-'+Math.random().toString(36).slice(2,5);
   const msgs = document.getElementById('chat-messages');
   const div = document.createElement('div');
-
-  if (role === 'ai-action') {
-    div.className = 'chat-bubble ai-action';
-    div.style.cssText = 'background:var(--green-pale,#ddf0ea);color:#2d5e48;align-self:flex-start;border-bottom-left-radius:4px;white-space:pre-wrap;font-size:13px;';
+  if (role==='ai-action') {
+    div.className='chat-bubble ai-action';
+    div.style.cssText='background:var(--green-pale);color:#2d5e48;align-self:flex-start;border-bottom-left-radius:4px;white-space:pre-wrap;font-size:13px;';
   } else {
-    div.className = `chat-bubble ${role}${isLoading?' loading':''}`;
+    div.className=`chat-bubble ${role}${isLoading?' loading':''}`;
   }
-
-  div.id = id;
-  div.style.whiteSpace = 'pre-wrap';
-  div.textContent = text;
-  msgs.appendChild(div);
-  msgs.scrollTop = msgs.scrollHeight;
+  div.id=id; div.style.whiteSpace='pre-wrap'; div.textContent=text;
+  msgs.appendChild(div); msgs.scrollTop=msgs.scrollHeight;
   return id;
 }
 
-function updateBubble(id, text) {
-  const el = document.getElementById(id);
-  if (el) el.textContent = text;
-}
-
+function updateBubble(id,text){const el=document.getElementById(id);if(el)el.textContent=text;}
 
 // ── IMAGE UPLOAD + ANNOTATION FOR CHAT ──
 let chatImageData = null; // {base64, mediaType}

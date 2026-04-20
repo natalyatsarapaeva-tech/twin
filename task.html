@@ -908,8 +908,7 @@ async function triggerTagSummaryUpdate(tags) {
       if (!tagTasks.length) continue;
       const taskList = tagTasks.map(t =>
         `[${t.status}] ${t.title}${t.notes?' | '+t.notes.slice(0,80):''}${(t.subtasks||[]).length?' | '+t.subtasks.length+' subtasks':''}`
-      ).join('
-');
+      ).join('\n');
       const TAG_LABELS = {dev:'Dev',strategy:'Strategy',analytics:'Analytics',clients:'Clients',
         leads:'Leads',ux:'UX',kids:'Kids',health:'Health',urgent:'Urgent',ideas:'Ideas',
         money:'Money',home:'Home',travel:'Travel',rest:'Rest',swedish:'Swedish'};

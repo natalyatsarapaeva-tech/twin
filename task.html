@@ -300,7 +300,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, updateDoc, deleteDoc, setDoc, getDocs, collection } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD1uWPrp12lvpyBzXCOq9IrMuTU4uOTRao",
@@ -434,9 +434,14 @@ function renderSubtasks() {
 
 // ── STATUS ──
 window.setStatus = async function(status, el) {
+  if (status === 'done' && task.status !== 'done') {
+    task.doneAt = new Date().toISOString();
+  }
   task.status = status;
   document.querySelectorAll('.status-opt').forEach(b => b.classList.toggle('active', b.dataset.s === status));
   await save();
+  // Update tag summary in background
+  if (task.tags && task.tags.length) triggerTagSummaryUpdate(task.tags);
   toast('Status updated');
 }
 
@@ -491,6 +496,7 @@ window.addSubtask = async function() {
   };
   task.subtasks.push(sub);
   await save();
+  if (task.tags && task.tags.length) triggerTagSummaryUpdate(task.tags);
   renderSubtasks();
   document.getElementById('sub-title').value = '';
   document.getElementById('sub-note').value = '';
@@ -571,6 +577,7 @@ window.saveEditModal = async function() {
   task.dueDate = document.getElementById('edit-due').value || null;
   task.priority = document.getElementById('edit-priority').value;
   await save();
+  if (task.tags && task.tags.length) triggerTagSummaryUpdate(task.tags);
   render();
   closeEditModal();
   toast('Task updated');
@@ -739,8 +746,10 @@ function showAiResult(text, showActions=false, type='') {
 
 window.acceptAiSubtasks = async function() {
   if (!pendingAiSubtasks) return;
-  const count = pendingAiSubtasks.length;
-  pendingAiSubtasks.forEach(s => task.subtasks.push({
+  const toAdd = proposalSelected
+    ? pendingAiSubtasks.filter((_,i) => proposalSelected[i])
+    : [...pendingAiSubtasks];
+  toAdd.forEach(s => task.subtasks.push({
     title: s.title || '',
     note: s.note || '',
     dueDate: s.dueDate || null,
@@ -749,15 +758,44 @@ window.acceptAiSubtasks = async function() {
     createdAt: new Date().toISOString()
   }));
   await save();
+  if (task.tags && task.tags.length) triggerTagSummaryUpdate(task.tags);
   renderSubtasks();
   rejectAi();
-  toast(`✅ Added ${count} subtasks`);
+  toast(`✅ Added ${toAdd.length} subtask${toAdd.length===1?'':'s'}`);
   pendingAiSubtasks = null;
+  proposalSelected = null;
 }
 
 window.rejectAi = function() {
   document.getElementById('ai-result').classList.remove('open');
   pendingAiSubtasks = null;
+  proposalSelected = null;
+}
+
+let proposalSelected = null; // null means all selected
+
+window.toggleProposal = function(i) {
+  // Init selection state from all-selected
+  if (!proposalSelected) {
+    proposalSelected = pendingAiSubtasks.map(()=>true);
+  }
+  proposalSelected[i] = !proposalSelected[i];
+  const check = document.getElementById('sp-check-'+i);
+  if (check) {
+    check.style.background = proposalSelected[i] ? 'var(--lavender)' : 'var(--white)';
+    check.style.color = proposalSelected[i] ? 'white' : 'transparent';
+    check.style.borderColor = proposalSelected[i] ? 'var(--lavender)' : 'var(--border)';
+    const row = document.getElementById('sp-'+i);
+    if (row) row.style.opacity = proposalSelected[i] ? '1' : '0.4';
+  }
+}
+
+window.removeProposal = function(i) {
+  pendingAiSubtasks.splice(i,1);
+  if (proposalSelected) proposalSelected.splice(i,1);
+  const el = document.getElementById('ai-result');
+  if (pendingAiSubtasks.length) renderEditableSubtaskProposals(el);
+  else rejectAi();
 }
 
 async function callGPT(apiKey, systemMsg, userMsg) {
@@ -857,6 +895,43 @@ window.deleteTask = async function() {
 // ── SAVE ──
 async function save() {
   await updateDoc(doc(db, 'tasks', task.id), task);
+}
+
+// Fire-and-forget tag summary update
+async function triggerTagSummaryUpdate(tags) {
+  const apiKey = localStorage.getItem('openai_api_key');
+  if (!apiKey || !tags || !tags.length) return;
+  try {
+    const snap = await getDocs(collection(db, 'tasks'));
+    const allTasks = snap.docs.map(d => ({id:d.id,...d.data()}));
+    for (const tagId of tags) {
+      const tagTasks = allTasks.filter(t => (t.tags||[]).includes(tagId));
+      if (!tagTasks.length) continue;
+      const taskList = tagTasks.map(t =>
+        `[${t.status}] ${t.title}${t.notes?' | '+t.notes.slice(0,80):''}${(t.subtasks||[]).length?' | '+t.subtasks.length+' subtasks':''}`
+      ).join('
+');
+      const TAG_LABELS = {dev:'Dev',strategy:'Strategy',analytics:'Analytics',clients:'Clients',
+        leads:'Leads',ux:'UX',kids:'Kids',health:'Health',urgent:'Urgent',ideas:'Ideas',
+        money:'Money',home:'Home',travel:'Travel',rest:'Rest',swedish:'Swedish'};
+      const res = await fetch('https://api.openai.com/v1/chat/completions',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
+        body:JSON.stringify({model:'gpt-4o',max_tokens:200,temperature:0.3,messages:[
+          {role:'system',content:'Write a 3-5 sentence project summary for an AI assistant. Cover: what this area is about, current status, main open items, recently completed. Be specific. English only.'},
+          {role:'user',content:`Area: ${TAG_LABELS[tagId]||tagId}
+
+Tasks:
+${taskList}`}
+        ]})
+      });
+      const data = await res.json();
+      const summary = data.choices[0].message.content.trim();
+      const { setDoc: _setDoc, doc: _doc } = await import("https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js");
+      await _setDoc(_doc(db,'contexts','tag-'+tagId),
+        {taskSummary:summary, summaryUpdatedAt:new Date().toISOString()},{merge:true});
+    }
+  } catch(e) { /* silent */ }
 }
 
 // ── HELPERS ──

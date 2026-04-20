@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>Задача</title>
+  <link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:#f0f4f8; --surface:#ffffff; --surface2:#e8eef5; --border:#dce5ef;
+      --blue:#4a7fb5; --blue-light:#7aadd4; --blue-pale:#c8dcf0;
+      --lavender:#8b9fd4; --lav-pale:#dde3f5; --slate:#3d5a7a; --slate-dark:#2e4a6a;
+      --text:#1e2d3d; --text-soft:#6b83a0; --white:#ffffff; --shadow:rgba(61,90,122,0.12);
+      --green:#5a9e82; --green-pale:#ddf0ea; --amber:#c49a4a; --amber-pale:#fdf0d5;
+      --red:#c05a5a; --red-pale:#fde8e8;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+
+    /* ── LOADING ── */
+    #loading{position:fixed;inset:0;background:var(--slate);display:flex;align-items:center;justify-content:center;z-index:999;}
+    .loading-icon{font-size:48px;animation:pulse 1.4s ease infinite;}
+    @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+
+    /* ── HEADER ── */
+    .task-header{background:linear-gradient(135deg,var(--slate) 0%,#2e4a6a 100%);padding:48px 24px 24px;position:relative;overflow:hidden;}
+    .task-header::before{content:'';position:absolute;top:-60px;right:-60px;width:180px;height:180px;border-radius:50%;background:var(--lavender);opacity:.15;}
+    .back-btn{display:flex;align-items:center;gap:6px;color:var(--blue-pale);font-size:14px;cursor:pointer;background:none;border:none;padding:0;margin-bottom:16px;font-family:'DM Sans',sans-serif;opacity:.9;}
+    .task-title-wrap{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
+    .task-title{font-family:'Spectral',serif;font-size:26px;color:var(--white);line-height:1.3;flex:1;}
+    .edit-btn{background:rgba(255,255,255,.15);border:none;color:var(--white);padding:8px 14px;border-radius:10px;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;white-space:nowrap;flex-shrink:0;border:1px solid rgba(255,255,255,.2);}
+
+    .task-meta-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
+    .meta-chip{padding:4px 10px;border-radius:8px;font-size:12px;font-weight:500;}
+    .chip-due{background:rgba(255,255,255,.15);color:var(--blue-pale);}
+    .chip-due.overdue{background:rgba(192,90,90,.3);color:#f0b0b0;}
+    .chip-due.today{background:rgba(196,154,74,.3);color:#f5d090;}
+    .chip-priority-high{background:rgba(192,90,90,.25);color:#f0b0b0;}
+    .chip-priority-med{background:rgba(196,154,74,.25);color:#f5d090;}
+    .chip-priority-low{background:rgba(90,158,130,.25);color:#a0e0c8;}
+
+    .status-bar{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;}
+    .status-opt{padding:6px 12px;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;border:2px solid transparent;font-family:'DM Sans',sans-serif;transition:all .2s;}
+    .status-opt.s-new{background:rgba(122,173,212,.2);color:var(--blue-pale);border-color:rgba(122,173,212,.3);}
+    .status-opt.s-new.active{background:var(--blue-light);color:var(--white);border-color:var(--blue-light);}
+    .status-opt.s-prog{background:rgba(196,154,74,.2);color:#f5d090;border-color:rgba(196,154,74,.3);}
+    .status-opt.s-prog.active{background:var(--amber);color:var(--white);border-color:var(--amber);}
+    .status-opt.s-block{background:rgba(192,90,90,.2);color:#f0b0b0;border-color:rgba(192,90,90,.3);}
+    .status-opt.s-block.active{background:var(--red);color:var(--white);border-color:var(--red);}
+    .status-opt.s-done{background:rgba(90,158,130,.2);color:#a0e0c8;border-color:rgba(90,158,130,.3);}
+    .status-opt.s-done.active{background:var(--green);color:var(--white);border-color:var(--green);}
+
+    /* ── BODY ── */
+    .task-body{padding:0 0 120px;}
+
+    /* SECTIONS */
+    .section{background:var(--white);margin:12px 16px 0;border-radius:16px;padding:18px;box-shadow:0 2px 10px var(--shadow);}
+    .section-title{font-size:11px;text-transform:uppercase;letter-spacing:.15em;color:var(--blue);font-weight:700;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;}
+    .section-action{font-size:13px;color:var(--lavender);cursor:pointer;text-transform:none;letter-spacing:0;font-weight:600;}
+
+    /* DESCRIPTION / NOTES */
+    .notes-textarea{width:100%;padding:12px;border-radius:10px;border:2px solid var(--border);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text);outline:none;resize:vertical;min-height:80px;background:var(--surface2);line-height:1.6;}
+    .notes-textarea:focus{border-color:var(--lavender);background:var(--white);}
+    .notes-textarea::placeholder{color:var(--text-soft);}
+    .save-inline-btn{margin-top:8px;padding:8px 16px;border-radius:10px;background:var(--slate);color:var(--white);border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;}
+
+    /* TAGS */
+    .tags-wrap{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}
+    .tag-pill{padding:5px 10px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:4px;}
+    .tag-pill.work{background:var(--lav-pale);color:#4a5fa0;}
+    .tag-pill.personal{background:var(--green-pale);color:#3d7a62;}
+    .tag-pill-del{font-size:14px;opacity:.6;}
+    .add-tag-btn{padding:5px 10px;border-radius:8px;font-size:12px;font-weight:600;border:2px dashed var(--border);background:transparent;color:var(--text-soft);cursor:pointer;font-family:'DM Sans',sans-serif;}
+    .tag-dropdown{background:var(--white);border-radius:12px;padding:8px;box-shadow:0 4px 20px var(--shadow);border:1px solid var(--border);margin-top:8px;display:none;flex-wrap:wrap;gap:6px;}
+    .tag-dropdown.open{display:flex;}
+    .tag-opt{padding:5px 10px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:2px solid var(--border);background:transparent;color:var(--text-soft);}
+    .tag-opt.selected{background:var(--slate);color:var(--white);border-color:var(--slate);}
+
+    /* SUBTASKS */
+    .subtask-list{display:flex;flex-direction:column;gap:10px;}
+    .subtask-item{background:var(--surface2);border-radius:12px;padding:14px;position:relative;cursor:pointer;transition:box-shadow .2s;}
+    .subtask-item:active{box-shadow:0 0 0 2px var(--lavender);}
+    .subtask-header{display:flex;align-items:flex-start;gap:10px;}
+    .subtask-check{width:20px;height:20px;border-radius:6px;border:2px solid var(--border);background:var(--white);cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;transition:all .2s;margin-top:1px;}
+    .subtask-check.done{background:var(--green);border-color:var(--green);color:var(--white);}
+    .subtask-info{flex:1;min-width:0;}
+    .subtask-title{font-size:14px;font-weight:500;color:var(--text);line-height:1.3;}
+    .subtask-title.done{text-decoration:line-through;color:var(--text-soft);}
+    .subtask-meta{display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;}
+    .subtask-date{font-size:11px;padding:2px 7px;border-radius:6px;}
+    .subtask-date.overdue{background:var(--red-pale);color:var(--red);}
+    .subtask-date.today{background:var(--amber-pale);color:var(--amber);}
+    .subtask-date.normal{background:var(--surface2);color:var(--text-soft);}
+    .subtask-assigned{font-size:11px;color:var(--text-soft);padding:2px 7px;background:var(--lav-pale);border-radius:6px;}
+    .subtask-note{font-size:12px;color:var(--text-soft);margin-top:6px;line-height:1.5;padding-top:6px;border-top:1px solid var(--border);}
+    .subtask-status-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;}
+    .badge-new{background:var(--lav-pale);color:var(--lavender);}
+    .badge-in-progress{background:var(--amber-pale);color:var(--amber);}
+    .badge-blocked{background:var(--red-pale);color:var(--red);}
+    .badge-done{background:var(--green-pale);color:var(--green);}
+
+    /* ADD SUBTASK */
+    .add-subtask-form{background:var(--lav-pale);border-radius:12px;padding:14px;margin-top:10px;display:none;}
+    .add-subtask-form.open{display:block;}
+    .form-row{display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap;}
+    .form-input{flex:1;min-width:0;padding:9px 12px;border-radius:10px;border:2px solid var(--border);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text);outline:none;background:var(--white);}
+    .form-input:focus{border-color:var(--lavender);}
+    .form-input.small{max-width:140px;}
+    .form-select{padding:9px 12px;border-radius:10px;border:2px solid var(--border);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;background:var(--white);cursor:pointer;}
+    .form-select:focus{border-color:var(--lavender);}
+    .form-actions{display:flex;gap:8px;}
+    .btn-save{padding:9px 16px;border-radius:10px;background:var(--slate);color:var(--white);border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;}
+    .btn-cancel{padding:9px 16px;border-radius:10px;background:transparent;color:var(--text-soft);border:2px solid var(--border);font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;}
+
+    /* AI PANEL */
+    .ai-section{background:linear-gradient(135deg,var(--lav-pale),#eef1fc);border-radius:16px;margin:12px 16px 0;padding:18px;box-shadow:0 2px 10px var(--shadow);}
+    .ai-title{font-size:11px;text-transform:uppercase;letter-spacing:.15em;color:var(--lavender);font-weight:700;margin-bottom:12px;}
+    .ai-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+    .ai-btn{padding:8px 14px;border-radius:10px;background:var(--white);border:2px solid var(--border);color:var(--slate);font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .2s;}
+    .ai-btn:active{background:var(--lav-pale);border-color:var(--lavender);}
+    .ai-result{background:var(--white);border-radius:12px;padding:14px;font-size:13px;line-height:1.7;color:var(--text);display:none;margin-top:8px;border:1px solid var(--border);}
+    .ai-result.open{display:block;}
+    .ai-result-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+    .ai-result-btn{padding:7px 14px;border-radius:9px;font-size:12px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;border:none;}
+    .ai-accept{background:var(--green);color:var(--white);}
+    .ai-reject{background:var(--surface2);color:var(--text-soft);}
+
+    /* MODAL — subtask detail */
+    .modal-overlay{position:fixed;inset:0;background:rgba(30,45,61,.5);z-index:300;display:none;backdrop-filter:blur(2px);}
+    .modal{position:fixed;bottom:0;left:0;right:0;max-height:85vh;background:var(--white);border-radius:24px 24px 0 0;z-index:301;overflow-y:auto;transform:translateY(100%);transition:transform .3s cubic-bezier(.32,1,.6,1);}
+    .modal.open{transform:translateY(0);}
+    .modal-handle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:12px auto 0;}
+    .modal-header{padding:16px 20px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border);}
+    .modal-title{font-family:'Spectral',serif;font-size:18px;color:var(--slate);}
+    .modal-close{background:none;border:none;font-size:22px;color:var(--text-soft);cursor:pointer;}
+    .modal-body{padding:16px 20px 32px;}
+    .modal-label{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--blue);font-weight:700;margin-bottom:6px;display:block;margin-top:14px;}
+    .modal-input{width:100%;padding:10px 12px;border-radius:10px;border:2px solid var(--border);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text);outline:none;background:var(--surface2);}
+    .modal-input:focus{border-color:var(--lavender);background:var(--white);}
+    textarea.modal-input{resize:vertical;min-height:70px;}
+    .modal-select{width:100%;padding:10px 12px;border-radius:10px;border:2px solid var(--border);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text);outline:none;background:var(--surface2);cursor:pointer;}
+    .modal-select:focus{border-color:var(--lavender);}
+    .modal-save{width:100%;padding:14px;border-radius:12px;background:var(--slate);color:var(--white);border:none;font-size:15px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:18px;}
+    .modal-delete{width:100%;padding:12px;border-radius:12px;background:none;border:2px solid var(--red);color:var(--red);font-size:14px;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:8px;}
+
+    /* DELETE TASK */
+    .delete-btn{margin:16px 16px 0;padding:14px;background:none;border:2px solid var(--red);color:var(--red);border-radius:14px;width:calc(100% - 32px);font-size:14px;cursor:pointer;font-family:'DM Sans',sans-serif;}
+
+    /* ANIM */
+    .fade-in{animation:fadeIn .3s ease both;}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+    /* TOAST */
+    #toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--slate);color:var(--white);padding:12px 22px;border-radius:12px;font-size:14px;font-weight:600;transition:transform .3s;z-index:999;white-space:nowrap;}
+    #toast.show{transform:translateX(-50%) translateY(0);}
+  </style>
+</head>
+<body>
+
+<div id="loading"><div class="loading-icon">⏳</div></div>
+
+<div id="task-page" style="display:none">
+  <div class="task-header">
+    <button class="back-btn" onclick="goBack()">← Все дела</button>
+    <div class="task-title-wrap">
+      <div class="task-title" id="t-title">—</div>
+      <button class="edit-btn" onclick="openEditModal()">✏️ Изменить</button>
+    </div>
+    <div class="task-meta-row" id="t-meta-row"></div>
+    <div class="status-bar">
+      <button class="status-opt s-new" data-s="new" onclick="setStatus('new',this)">Новое</button>
+      <button class="status-opt s-prog" data-s="in-progress" onclick="setStatus('in-progress',this)">В процессе</button>
+      <button class="status-opt s-block" data-s="blocked" onclick="setStatus('blocked',this)">Блокер</button>
+      <button class="status-opt s-done" data-s="done" onclick="setStatus('done',this)">Готово</button>
+    </div>
+  </div>
+
+  <div class="task-body">
+
+    <!-- NOTES -->
+    <div class="section" style="margin-top:16px;">
+      <div class="section-title">📝 Общие заметки</div>
+      <textarea class="notes-textarea" id="t-notes" placeholder="Заметки, контекст, ссылки…" oninput="markDirty()"></textarea>
+      <button class="save-inline-btn" id="notes-save-btn" onclick="saveNotes()" style="display:none">Сохранить</button>
+    </div>
+
+    <!-- TAGS -->
+    <div class="section">
+      <div class="section-title">🏷 Теги</div>
+      <div class="tags-wrap" id="tags-wrap"></div>
+      <button class="add-tag-btn" onclick="toggleTagDropdown()">+ Добавить тег</button>
+      <div class="tag-dropdown" id="tag-dropdown"></div>
+    </div>
+
+    <!-- SUBTASKS -->
+    <div class="section">
+      <div class="section-title">
+        📌 Подзадачи
+        <span class="section-action" onclick="toggleAddSubtask()">+ Добавить</span>
+      </div>
+      <div class="subtask-list" id="subtask-list"></div>
+      <div class="add-subtask-form" id="add-subtask-form">
+        <div class="form-row">
+          <input class="form-input" id="sub-title" placeholder="Описание подзадачи" />
+        </div>
+        <div class="form-row">
+          <input class="form-input form-input small" id="sub-date" type="date" />
+          <input class="form-input" id="sub-assigned" placeholder="Кому назначено" />
+        </div>
+        <div class="form-row">
+          <select class="form-select" id="sub-status">
+            <option value="new">Новое</option>
+            <option value="in-progress">В процессе</option>
+            <option value="blocked">Блокер</option>
+            <option value="done">Готово</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <input class="form-input" id="sub-note" placeholder="Заметка к подзадаче (опционально)" />
+        </div>
+        <div class="form-actions">
+          <button class="btn-save" onclick="addSubtask()">Добавить</button>
+          <button class="btn-cancel" onclick="toggleAddSubtask()">Отмена</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI PANEL -->
+    <div class="ai-section">
+      <div class="ai-title">✨ AI-помощник</div>
+      <div class="ai-actions">
+        <button class="ai-btn" onclick="aiDraft()">📝 Черновик решения</button>
+        <button class="ai-btn" onclick="aiSuggestSubtasks()">💡 Предложить подзадачи</button>
+        <button class="ai-btn" onclick="openAiInput()">📋 Добавить из текста</button>
+      </div>
+      <div class="ai-result" id="ai-result"></div>
+    </div>
+
+    <!-- DELETE -->
+    <button class="delete-btn" onclick="deleteTask()">🗑 Удалить дело</button>
+
+  </div>
+</div>
+
+<!-- SUBTASK DETAIL MODAL -->
+<div class="modal-overlay" id="modal-overlay" onclick="closeModal()"></div>
+<div class="modal" id="subtask-modal">
+  <div class="modal-handle"></div>
+  <div class="modal-header">
+    <div class="modal-title" id="modal-title">Подзадача</div>
+    <button class="modal-close" onclick="closeModal()">×</button>
+  </div>
+  <div class="modal-body">
+    <label class="modal-label">Описание</label>
+    <input class="modal-input" id="m-title" placeholder="Описание подзадачи"/>
+    <label class="modal-label">Заметка</label>
+    <textarea class="modal-input" id="m-note" placeholder="Детали, ссылки…"></textarea>
+    <label class="modal-label">Срок</label>
+    <input class="modal-input" type="date" id="m-date"/>
+    <label class="modal-label">Статус</label>
+    <select class="modal-select" id="m-status">
+      <option value="new">Новое</option>
+      <option value="in-progress">В процессе</option>
+      <option value="blocked">Блокер</option>
+      <option value="done">Готово</option>
+    </select>
+    <label class="modal-label">Assigned</label>
+    <input class="modal-input" id="m-assigned" placeholder="Имя или email"/>
+    <button class="modal-save" onclick="saveSubtaskModal()">💾 Сохранить</button>
+    <button class="modal-delete" onclick="deleteSubtaskModal()">🗑 Удалить подзадачу</button>
+  </div>
+</div>
+
+<!-- EDIT TASK MODAL -->
+<div class="modal-overlay" id="edit-overlay" onclick="closeEditModal()"></div>
+<div class="modal" id="edit-modal">
+  <div class="modal-handle"></div>
+  <div class="modal-header">
+    <div class="modal-title">Редактировать дело</div>
+    <button class="modal-close" onclick="closeEditModal()">×</button>
+  </div>
+  <div class="modal-body">
+    <label class="modal-label">Название</label>
+    <input class="modal-input" id="edit-title"/>
+    <label class="modal-label">Срок</label>
+    <input class="modal-input" type="date" id="edit-due"/>
+    <label class="modal-label">Приоритет</label>
+    <select class="modal-select" id="edit-priority">
+      <option value="none">Без приоритета</option>
+      <option value="low">Низкий</option>
+      <option value="med">Средний</option>
+      <option value="high">Высокий</option>
+    </select>
+    <button class="modal-save" onclick="saveEditModal()">💾 Сохранить</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "REPLACE_WITH_YOUR_API_KEY",
+  authDomain: "REPLACE.firebaseapp.com",
+  projectId: "REPLACE_PROJECT_ID",
+  storageBucket: "REPLACE.firebasestorage.app",
+  messagingSenderId: "REPLACE",
+  appId: "REPLACE"
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// ── TAG TAXONOMY ──
+const WORK_TAGS = ['dev','strategy','analytics','clients','leads','ux'];
+const PERSONAL_TAGS = ['kids','health','urgent','ideas','money','home','travel','rest','swedish'];
+const TAG_META = {
+  dev:{label:'💻 Разработка',group:'work'},strategy:{label:'🎯 Стратегия',group:'work'},
+  analytics:{label:'📊 Аналитика',group:'work'},clients:{label:'🤝 Клиенты',group:'work'},
+  leads:{label:'📣 Лиды',group:'work'},ux:{label:'🎨 UX',group:'work'},
+  kids:{label:'👶 Дети',group:'personal'},health:{label:'💚 Здоровье',group:'personal'},
+  urgent:{label:'🚨 Срочное',group:'personal'},ideas:{label:'💡 Идеи',group:'personal'},
+  money:{label:'💰 Деньги',group:'personal'},home:{label:'🏠 Быт',group:'personal'},
+  travel:{label:'✈️ Поездки',group:'personal'},rest:{label:'🌊 Отдых',group:'personal'},
+  swedish:{label:'🇸🇪 Шведский',group:'personal'},
+};
+const ALL_TAGS = [...WORK_TAGS, ...PERSONAL_TAGS];
+
+// ── STATE ──
+let task = null;
+let editingSubtaskIdx = null;
+let notesDirty = false;
+let pendingAiSubtasks = null;
+
+// ── LOAD ──
+async function load() {
+  const id = localStorage.getItem('currentTaskId');
+  if (!id) { window.location.href = 'index.html'; return; }
+  const snap = await getDoc(doc(db, 'tasks', id));
+  if (!snap.exists()) { window.location.href = 'index.html'; return; }
+  task = {id: snap.id, ...snap.data()};
+  task.subtasks = task.subtasks || [];
+  task.tags = task.tags || [];
+  render();
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('task-page').style.display = 'block';
+}
+load().catch(e => {
+  document.getElementById('loading').innerHTML = `<div style="color:#c8dcf0;padding:24px;text-align:center">Ошибка: ${e.message}</div>`;
+});
+
+// ── RENDER ──
+function render() {
+  document.getElementById('t-title').textContent = task.title || '—';
+  document.getElementById('t-notes').value = task.notes || '';
+
+  // Meta chips
+  const today = todayStr();
+  let chips = '';
+  if (task.dueDate) {
+    let cls = 'chip-due';
+    if (task.dueDate < today) cls += ' overdue';
+    else if (task.dueDate === today) cls += ' today';
+    chips += `<span class="meta-chip ${cls}">📅 ${fmtDate(task.dueDate)}</span>`;
+  }
+  if (task.priority && task.priority !== 'none') {
+    const pLabels = {high:'🔴 Высокий',med:'🟡 Средний',low:'🟢 Низкий'};
+    chips += `<span class="meta-chip chip-priority-${task.priority}">${pLabels[task.priority]||''}</span>`;
+  }
+  document.getElementById('t-meta-row').innerHTML = chips;
+
+  // Status buttons
+  document.querySelectorAll('.status-opt').forEach(b => {
+    b.classList.toggle('active', b.dataset.s === (task.status || 'new'));
+  });
+
+  renderTags();
+  renderSubtasks();
+}
+
+function renderTags() {
+  const wrap = document.getElementById('tags-wrap');
+  wrap.innerHTML = (task.tags||[]).map(tag => {
+    const m = TAG_META[tag];
+    if (!m) return '';
+    return `<span class="tag-pill ${m.group}" onclick="removeTag('${tag}')">
+      ${m.label}<span class="tag-pill-del">×</span>
+    </span>`;
+  }).join('');
+
+  const dropdown = document.getElementById('tag-dropdown');
+  dropdown.innerHTML = ALL_TAGS.map(tag => {
+    const m = TAG_META[tag];
+    const sel = (task.tags||[]).includes(tag);
+    return `<button class="tag-opt${sel?' selected':''}" onclick="toggleTag('${tag}',this)">${m.label}</button>`;
+  }).join('');
+}
+
+function renderSubtasks() {
+  const list = document.getElementById('subtask-list');
+  const today = todayStr();
+  if (!task.subtasks.length) {
+    list.innerHTML = '<div style="color:var(--text-soft);font-size:14px;text-align:center;padding:12px 0;">Подзадач пока нет</div>';
+    return;
+  }
+  list.innerHTML = task.subtasks.map((s, i) => {
+    const done = s.status === 'done';
+    let dateCls = 'normal', dateText = '';
+    if (s.dueDate) {
+      dateText = fmtDate(s.dueDate);
+      if (s.dueDate < today) dateCls = 'overdue';
+      else if (s.dueDate === today) dateCls = 'today';
+    }
+    const badgeCls = {new:'badge-new','in-progress':'badge-in-progress',blocked:'badge-blocked',done:'badge-done'}[s.status]||'badge-new';
+    const statusLabel = {new:'Новое','in-progress':'В процессе',blocked:'Блокер',done:'Готово'}[s.status]||'Новое';
+    return `<div class="subtask-item fade-in" onclick="openSubtaskModal(${i})">
+      <div class="subtask-header">
+        <div class="subtask-check ${done?'done':''}" onclick="event.stopPropagation();toggleSubtaskDone(${i})">${done?'✓':''}</div>
+        <div class="subtask-info">
+          <div class="subtask-title${done?' done':''}">${escHtml(s.title)}</div>
+          <div class="subtask-meta">
+            <span class="subtask-status-badge ${badgeCls}">${statusLabel}</span>
+            ${dateText?`<span class="subtask-date ${dateCls}">📅 ${dateText}</span>`:''}
+            ${s.assigned?`<span class="subtask-assigned">👤 ${escHtml(s.assigned)}</span>`:''}
+          </div>
+          ${s.note?`<div class="subtask-note">${escHtml(s.note)}</div>`:''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── STATUS ──
+window.setStatus = async function(status, el) {
+  task.status = status;
+  document.querySelectorAll('.status-opt').forEach(b => b.classList.toggle('active', b.dataset.s === status));
+  await save();
+  toast('Статус обновлён');
+}
+
+// ── NOTES ──
+window.markDirty = function() {
+  notesDirty = true;
+  document.getElementById('notes-save-btn').style.display = 'block';
+}
+
+window.saveNotes = async function() {
+  task.notes = document.getElementById('t-notes').value;
+  await save();
+  notesDirty = false;
+  document.getElementById('notes-save-btn').style.display = 'none';
+  toast('Заметки сохранены');
+}
+
+// ── TAGS ──
+window.toggleTagDropdown = function() {
+  document.getElementById('tag-dropdown').classList.toggle('open');
+}
+
+window.toggleTag = async function(tag, el) {
+  const idx = (task.tags||[]).indexOf(tag);
+  if (idx >= 0) { task.tags.splice(idx, 1); el.classList.remove('selected'); }
+  else { task.tags.push(tag); el.classList.add('selected'); }
+  renderTags();
+  await save();
+}
+
+window.removeTag = async function(tag) {
+  task.tags = (task.tags||[]).filter(t => t !== tag);
+  renderTags();
+  await save();
+}
+
+// ── SUBTASKS ──
+window.toggleAddSubtask = function() {
+  document.getElementById('add-subtask-form').classList.toggle('open');
+}
+
+window.addSubtask = async function() {
+  const title = document.getElementById('sub-title').value.trim();
+  if (!title) { toast('Введи описание подзадачи'); return; }
+  const sub = {
+    title,
+    note: document.getElementById('sub-note').value.trim(),
+    dueDate: document.getElementById('sub-date').value || null,
+    status: document.getElementById('sub-status').value,
+    assigned: document.getElementById('sub-assigned').value.trim(),
+    createdAt: new Date().toISOString()
+  };
+  task.subtasks.push(sub);
+  await save();
+  renderSubtasks();
+  document.getElementById('sub-title').value = '';
+  document.getElementById('sub-note').value = '';
+  document.getElementById('sub-date').value = '';
+  document.getElementById('sub-assigned').value = '';
+  document.getElementById('sub-status').value = 'new';
+  document.getElementById('add-subtask-form').classList.remove('open');
+  toast('Подзадача добавлена');
+}
+
+window.toggleSubtaskDone = async function(i) {
+  const s = task.subtasks[i];
+  s.status = s.status === 'done' ? 'new' : 'done';
+  await save();
+  renderSubtasks();
+}
+
+// ── SUBTASK MODAL ──
+window.openSubtaskModal = function(i) {
+  editingSubtaskIdx = i;
+  const s = task.subtasks[i];
+  document.getElementById('modal-title').textContent = 'Подзадача';
+  document.getElementById('m-title').value = s.title || '';
+  document.getElementById('m-note').value = s.note || '';
+  document.getElementById('m-date').value = s.dueDate || '';
+  document.getElementById('m-status').value = s.status || 'new';
+  document.getElementById('m-assigned').value = s.assigned || '';
+  document.getElementById('modal-overlay').style.display = 'block';
+  setTimeout(() => document.getElementById('subtask-modal').classList.add('open'), 10);
+}
+
+window.closeModal = function() {
+  document.getElementById('subtask-modal').classList.remove('open');
+  document.getElementById('modal-overlay').style.display = 'none';
+  editingSubtaskIdx = null;
+}
+
+window.saveSubtaskModal = async function() {
+  if (editingSubtaskIdx === null) return;
+  const s = task.subtasks[editingSubtaskIdx];
+  s.title = document.getElementById('m-title').value.trim();
+  s.note = document.getElementById('m-note').value.trim();
+  s.dueDate = document.getElementById('m-date').value || null;
+  s.status = document.getElementById('m-status').value;
+  s.assigned = document.getElementById('m-assigned').value.trim();
+  await save();
+  renderSubtasks();
+  closeModal();
+  toast('Подзадача обновлена');
+}
+
+window.deleteSubtaskModal = async function() {
+  if (editingSubtaskIdx === null) return;
+  if (!confirm('Удалить подзадачу?')) return;
+  task.subtasks.splice(editingSubtaskIdx, 1);
+  await save();
+  renderSubtasks();
+  closeModal();
+  toast('Подзадача удалена');
+}
+
+// ── EDIT TASK MODAL ──
+window.openEditModal = function() {
+  document.getElementById('edit-title').value = task.title || '';
+  document.getElementById('edit-due').value = task.dueDate || '';
+  document.getElementById('edit-priority').value = task.priority || 'none';
+  document.getElementById('edit-overlay').style.display = 'block';
+  setTimeout(() => document.getElementById('edit-modal').classList.add('open'), 10);
+}
+
+window.closeEditModal = function() {
+  document.getElementById('edit-modal').classList.remove('open');
+  document.getElementById('edit-overlay').style.display = 'none';
+}
+
+window.saveEditModal = async function() {
+  task.title = document.getElementById('edit-title').value.trim();
+  task.dueDate = document.getElementById('edit-due').value || null;
+  task.priority = document.getElementById('edit-priority').value;
+  await save();
+  render();
+  closeEditModal();
+  toast('Дело обновлено');
+}
+
+// ══════════════════════════════════════════════
+// AI — итерация 2
+// • Контекст по тегу: при каждом вызове подтягиваем все дела с теми же тегами
+// • Три функции: черновик / предложить подзадачи / добавить из текста
+// • Все три получают полный контекст текущего дела + дел по теме
+// ══════════════════════════════════════════════
+
+async function getApiKey() { return localStorage.getItem('openai_api_key') || ''; }
+
+// ── КОНТЕКСТ ПО ТЕГУ ──
+// Загружаем дела с теми же тегами из Firebase для передачи в промпт
+async function loadSiblingTasks() {
+  if (!(task.tags||[]).length) return [];
+  try {
+    const { getDocs, collection } = await import("https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js");
+    const snap = await getDocs(collection(db, 'tasks'));
+    const all = snap.docs.map(d => ({id:d.id,...d.data()}));
+    return all.filter(t =>
+      t.id !== task.id &&
+      (t.tags||[]).some(tag => (task.tags||[]).includes(tag))
+    ).slice(0, 12); // до 12 связанных дел
+  } catch(e) { return []; }
+}
+
+function buildTaskDump(t, includeSubtasks=true) {
+  let s = `[${t.id}] ${t.title} | статус: ${t.status||'new'} | срок: ${t.dueDate||'нет'} | теги: ${(t.tags||[]).join(',')||'нет'}`;
+  if (includeSubtasks && (t.subtasks||[]).length) {
+    s += '\n  Подзадачи:\n' + t.subtasks.map((sub,i) =>
+      `    ${i}. [${sub.status||'new'}] ${sub.title}${sub.note?' — '+sub.note:''}${sub.dueDate?' | срок:'+sub.dueDate:''}${sub.assigned?' | @'+sub.assigned:''}`
+    ).join('\n');
+  }
+  return s;
+}
+
+function buildSystemPromptTask(siblingTasks) {
+  const today = todayStr();
+  const mainDump = `=== ТЕКУЩЕЕ ДЕЛО ===
+ID: ${task.id}
+Название: ${task.title}
+Статус: ${task.status||'new'} | Приоритет: ${task.priority||'none'} | Срок: ${task.dueDate||'нет'}
+Теги: ${(task.tags||[]).join(', ')||'нет'}
+Заметки: ${task.notes||'нет'}
+Подзадачи (${task.subtasks.length}):
+${task.subtasks.map((s,i) =>
+  `  ${i}. [${s.status||'new'}] ${s.title}${s.note?' — '+s.note:''}${s.dueDate?' | срок: '+s.dueDate:''}${s.assigned?' | @'+s.assigned:''}`
+).join('\n') || '  нет'}`;
+
+  const siblingDump = siblingTasks.length
+    ? `\n=== СВЯЗАННЫЕ ДЕЛА (те же теги) ===\n` + siblingTasks.map(t => buildTaskDump(t)).join('\n')
+    : '';
+
+  return `Ты AI-ассистент по управлению задачами. Сегодня: ${today}. Отвечай на русском языке.
+
+${mainDump}${siblingDump}
+
+Ты помогаешь с ТЕКУЩИМ делом, но знаешь контекст связанных дел.
+Будь конкретным, используй реальные данные из контекста.`;
+}
+
+// ── ЧЕРНОВИК РЕШЕНИЯ ──
+window.aiDraft = async function() {
+  const apiKey = await getApiKey();
+  if (!apiKey) { toast('Сначала сохрани OpenAI API key'); return; }
+  showAiResult('🔍 Собираю контекст…');
+  try {
+    const siblings = await loadSiblingTasks();
+    showAiResult('⏳ Генерирую черновик…');
+    const res = await callGPT(apiKey,
+      buildSystemPromptTask(siblings),
+      `Создай конкретный черновик плана решения для дела "${task.title}".
+Учти уже существующие подзадачи (не дублируй их), связанные дела, срок.
+Структурируй ответ: ключевые шаги, риски, первый конкретный шаг.`
+    );
+    showAiResult(res, false, 'draft');
+  } catch(e) { showAiResult('❌ ' + e.message); }
+}
+
+// ── ПРЕДЛОЖИТЬ ПОДЗАДАЧИ ──
+window.aiSuggestSubtasks = async function() {
+  const apiKey = await getApiKey();
+  if (!apiKey) { toast('Сначала сохрани OpenAI API key'); return; }
+  showAiResult('🔍 Анализирую контекст…');
+  try {
+    const siblings = await loadSiblingTasks();
+    showAiResult('⏳ Думаю…');
+    const res = await callGPT(apiKey,
+      buildSystemPromptTask(siblings),
+      `Предложи 4-6 новых подзадач для дела "${task.title}".
+Не дублируй уже существующие подзадачи. Учти контекст связанных дел.
+Ответь ТОЛЬКО JSON-массивом без пояснений и markdown:
+[{"title":"...","note":"краткая заметка","dueDate":"YYYY-MM-DD или null","status":"new","assigned":""}]`
+    );
+    const clean = res.replace(/^```json\s*/m,'').replace(/^```\s*/m,'').replace(/\s*```$/m,'').trim();
+    try {
+      const arr = JSON.parse(clean);
+      pendingAiSubtasks = arr;
+      const preview = arr.map((s,i) => `${i+1}. ${s.title}${s.note?' — '+s.note:''}`).join('\n');
+      showAiResult('💡 Предлагаю добавить:\n\n' + preview, true, 'subtasks');
+    } catch(e2) {
+      // GPT вернул текст, а не JSON — показываем как есть
+      showAiResult(res, false, 'draft');
+    }
+  } catch(e) { showAiResult('❌ ' + e.message); }
+}
+
+// ── ДОБАВИТЬ ИЗ ТЕКСТА / СКРИНА ──
+window.openAiInput = function() {
+  // Показываем inline textarea вместо prompt()
+  const el = document.getElementById('ai-result');
+  el.classList.add('open');
+  el.innerHTML = `
+    <div style="font-size:13px;color:var(--text-soft);margin-bottom:8px;">Вставь текст со списком подзадач, скопированный из любого источника:</div>
+    <textarea id="ai-text-input" style="width:100%;padding:10px;border-radius:9px;border:2px solid var(--border);font-family:'DM Sans',sans-serif;font-size:13px;resize:vertical;min-height:100px;outline:none;" placeholder="- Позвонить клиенту&#10;- Подготовить КП до пятницы&#10;- Согласовать с командой"></textarea>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="ai-result-btn ai-accept" onclick="parseTextInput()" style="flex:1">✨ Разобрать</button>
+      <button class="ai-result-btn ai-reject" onclick="rejectAi()">✕</button>
+    </div>`;
+  document.getElementById('ai-text-input')?.focus();
+}
+
+window.parseTextInput = async function() {
+  const text = document.getElementById('ai-text-input')?.value?.trim();
+  if (!text) { toast('Вставь текст'); return; }
+  await aiParseSubtasks(text);
+}
+
+async function aiParseSubtasks(text) {
+  const apiKey = await getApiKey();
+  if (!apiKey) { toast('Сначала сохрани OpenAI API key'); return; }
+  showAiResult('⏳ Разбираю текст…');
+  try {
+    const siblings = await loadSiblingTasks();
+    const res = await callGPT(apiKey,
+      buildSystemPromptTask(siblings),
+      `Пользователь прислал текст для дела "${task.title}". Извлеки список подзадач.
+Текст:\n\n${text}\n\n
+Ответь ТОЛЬКО JSON-массивом без пояснений:
+[{"title":"...","note":"...","dueDate":"YYYY-MM-DD или null","status":"new","assigned":""}]`
+    );
+    const clean = res.replace(/^```json\s*/m,'').replace(/^```\s*/m,'').replace(/\s*```$/m,'').trim();
+    const arr = JSON.parse(clean);
+    pendingAiSubtasks = arr;
+    const preview = arr.map((s,i) => `${i+1}. ${s.title}${s.note?' — '+s.note:''}`).join('\n');
+    showAiResult(`📋 Нашёл ${arr.length} подзадач:\n\n${preview}`, true, 'subtasks');
+  } catch(e) { showAiResult('❌ ' + e.message); }
+}
+
+// ── UI ──
+function showAiResult(text, showActions=false, type='') {
+  const el = document.getElementById('ai-result');
+  el.classList.add('open');
+  el.innerHTML = `<div style="white-space:pre-wrap;font-size:13px;line-height:1.6">${escHtml(text)}</div>`;
+  if (showActions && type === 'subtasks') {
+    el.innerHTML += `<div class="ai-result-actions">
+      <button class="ai-result-btn ai-accept" onclick="acceptAiSubtasks()">✅ Добавить все</button>
+      <button class="ai-result-btn ai-reject" onclick="rejectAi()">✕ Отклонить</button>
+    </div>`;
+  }
+  el.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+window.acceptAiSubtasks = async function() {
+  if (!pendingAiSubtasks) return;
+  const count = pendingAiSubtasks.length;
+  pendingAiSubtasks.forEach(s => task.subtasks.push({
+    title: s.title || '',
+    note: s.note || '',
+    dueDate: s.dueDate || null,
+    status: s.status || 'new',
+    assigned: s.assigned || '',
+    createdAt: new Date().toISOString()
+  }));
+  await save();
+  renderSubtasks();
+  rejectAi();
+  toast(`✅ Добавлено ${count} подзадач`);
+  pendingAiSubtasks = null;
+}
+
+window.rejectAi = function() {
+  document.getElementById('ai-result').classList.remove('open');
+  pendingAiSubtasks = null;
+}
+
+async function callGPT(apiKey, systemMsg, userMsg) {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
+    body: JSON.stringify({
+      model: 'gpt-4o',
+      max_tokens: 1000,
+      messages: [
+        {role:'system', content: systemMsg},
+        {role:'user', content: userMsg}
+      ]
+    })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message || 'OpenAI error');
+  return data.choices[0].message.content;
+}
+
+// ── DELETE TASK ──
+window.deleteTask = async function() {
+  if (!confirm(`Удалить «${task.title}»? Это нельзя отменить.`)) return;
+  await deleteDoc(doc(db, 'tasks', task.id));
+  window.location.href = 'index.html';
+}
+
+// ── SAVE ──
+async function save() {
+  await updateDoc(doc(db, 'tasks', task.id), task);
+}
+
+// ── HELPERS ──
+window.goBack = () => window.location.href = 'index.html';
+function todayStr() { return new Date().toISOString().split('T')[0]; }
+function fmtDate(d) {
+  if (!d) return '';
+  const [y,m,day] = d.split('-');
+  const months = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+  return `${parseInt(day)} ${months[parseInt(m)-1]}`;
+}
+function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+</script>
+</body>
+</html>

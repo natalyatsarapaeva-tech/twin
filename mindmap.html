@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mind Map</title>
+  <link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:#f0f4f8; --surface:#ffffff; --border:#dce5ef;
+      --blue:#4a7fb5; --blue-light:#7aadd4; --blue-pale:#c8dcf0;
+      --lavender:#8b9fd4; --lav-pale:#dde3f5; --slate:#3d5a7a;
+      --text:#1e2d3d; --text-soft:#6b83a0; --white:#fff;
+      --shadow:rgba(61,90,122,0.12); --green:#5a9e82; --green-pale:#ddf0ea;
+      --amber:#c49a4a; --red:#c05a5a;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    html,body{height:100%;overflow:hidden;font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);}
+
+    /* ── LAYOUT ── */
+    #app{display:flex;flex-direction:column;height:100vh;}
+    .top-bar{background:linear-gradient(135deg,var(--slate) 0%,#2e4a6a 100%);padding:40px 20px 14px;display:flex;align-items:center;gap:12px;flex-shrink:0;}
+    .back-btn{color:var(--blue-pale);font-size:14px;background:none;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;opacity:.9;}
+    .top-bar-title{font-family:'Spectral',serif;font-size:20px;color:var(--white);}
+    .top-bar-sub{font-size:12px;color:var(--blue-pale);opacity:.7;margin-left:auto;}
+
+    .main{display:flex;flex:1;min-height:0;}
+
+    /* ── MAP PANEL ── */
+    #map-panel{flex:1;overflow:auto;position:relative;background:var(--bg);}
+    #map-canvas{min-width:100%;min-height:100%;padding:24px 16px 40px;position:relative;}
+    svg.connectors{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible;}
+
+    /* ── DETAIL PANEL ── */
+    #detail-panel{width:340px;border-left:1px solid var(--border);background:var(--white);overflow-y:auto;flex-shrink:0;transition:width .3s;display:flex;flex-direction:column;}
+    #detail-panel.collapsed{width:0;border:none;}
+    .detail-close{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+    .detail-close-btn{background:none;border:none;font-size:20px;color:var(--text-soft);cursor:pointer;}
+    .detail-body{padding:16px;flex:1;}
+    .detail-type{font-size:10px;text-transform:uppercase;letter-spacing:.15em;color:var(--lavender);font-weight:700;margin-bottom:6px;}
+    .detail-title{font-family:'Spectral',serif;font-size:20px;color:var(--slate);margin-bottom:10px;line-height:1.3;}
+    .detail-chip{display:inline-block;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:500;margin:3px 3px 3px 0;}
+    .detail-section{margin-top:14px;}
+    .detail-section-label{font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--blue);font-weight:700;margin-bottom:8px;}
+    .detail-subtask{padding:8px 10px;border-radius:9px;background:var(--bg);margin-bottom:6px;font-size:13px;display:flex;gap:8px;align-items:flex-start;}
+    .detail-subtask-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:4px;}
+    .dot-new{background:var(--blue-light);} .dot-in-progress{background:var(--amber);} .dot-blocked{background:var(--red);} .dot-done{background:var(--green);}
+    .detail-open-btn{width:100%;padding:11px;border-radius:11px;background:var(--slate);color:var(--white);border:none;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:14px;}
+    .detail-add-btn{width:100%;padding:10px;border-radius:11px;background:transparent;border:2px dashed var(--lavender);color:var(--lavender);font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:8px;}
+
+    /* ── MAP NODES ── */
+    .map-root{display:flex;flex-direction:column;gap:32px;}
+    .root-group{display:flex;flex-direction:column;gap:0;}
+    .root-node{display:inline-flex;align-items:center;padding:10px 20px;border-radius:14px;font-size:15px;font-weight:700;cursor:pointer;position:relative;white-space:nowrap;margin-bottom:0;transition:box-shadow .2s;z-index:2;}
+    .root-node.work{background:var(--lav-pale);color:#3d4d88;box-shadow:0 2px 10px rgba(139,159,212,.3);}
+    .root-node.personal{background:var(--green-pale);color:#2d5e48;box-shadow:0 2px 10px rgba(90,158,130,.25);}
+    .root-node:hover{box-shadow:0 4px 16px rgba(61,90,122,.25);}
+
+    .tasks-branch{margin-left:48px;margin-top:8px;display:flex;flex-direction:column;gap:6px;}
+    .task-node{display:inline-flex;align-items:center;gap:8px;padding:8px 14px;border-radius:11px;background:var(--white);border:2px solid var(--border);font-size:13px;font-weight:500;cursor:pointer;position:relative;white-space:nowrap;transition:border-color .2s,box-shadow .2s;max-width:380px;}
+    .task-node:hover{border-color:var(--lavender);box-shadow:0 2px 10px var(--shadow);}
+    .task-node.urgent-high{border-left:4px solid var(--red)!important;border-color:var(--red);}
+    .task-node.urgent-med{border-left:4px solid var(--amber)!important;border-color:var(--amber);}
+    .task-node-title{overflow:hidden;text-overflow:ellipsis;max-width:280px;}
+    .task-node-due{font-size:11px;padding:2px 6px;border-radius:6px;flex-shrink:0;}
+    .due-overdue{background:#fde8e8;color:var(--red);}
+    .due-today{background:#fff3cd;color:var(--amber);}
+    .due-soon{background:var(--lav-pale);color:var(--lavender);}
+    .due-normal{background:var(--bg);color:var(--text-soft);}
+    .node-add-btn{margin-left:6px;background:none;border:none;color:var(--lavender);font-size:16px;cursor:pointer;padding:2px 4px;opacity:.6;}
+    .node-add-btn:hover{opacity:1;}
+
+    .subtasks-branch{margin-left:96px;margin-top:4px;display:flex;flex-direction:column;gap:4px;}
+    .subtask-node{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:8px;background:transparent;border:1px solid var(--border);font-size:12px;cursor:pointer;white-space:nowrap;transition:background .2s;max-width:300px;}
+    .subtask-node:hover{background:var(--bg);}
+    .subtask-node.s-done{opacity:.5;text-decoration:line-through;}
+    .sub-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+
+    .add-task-node{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:10px;border:2px dashed var(--border);background:transparent;color:var(--text-soft);font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:4px;transition:border-color .2s;}
+    .add-task-node:hover{border-color:var(--lavender);color:var(--lavender);}
+
+    /* LEGEND */
+    .legend{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--white);border-radius:12px;padding:8px 16px;font-size:11px;color:var(--text-soft);display:flex;gap:14px;box-shadow:0 2px 12px var(--shadow);border:1px solid var(--border);z-index:10;}
+    .legend-item{display:flex;align-items:center;gap:5px;}
+    .legend-dot{width:8px;height:8px;border-radius:50%;}
+
+    /* LOADING */
+    #loading{position:fixed;inset:0;background:var(--slate);display:flex;align-items:center;justify-content:center;z-index:999;}
+    .loading-icon{font-size:48px;animation:pulse 1.4s ease infinite;color:var(--blue-pale);}
+    @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+  </style>
+</head>
+<body>
+<div id="loading"><div class="loading-icon">🗺️</div></div>
+
+<div id="app" style="display:none">
+  <div class="top-bar">
+    <button class="back-btn" onclick="window.location.href='index.html'">← Назад</button>
+    <div class="top-bar-title">🗺 Mind Map</div>
+    <div class="top-bar-sub" id="map-stats"></div>
+  </div>
+  <div class="main">
+    <div id="map-panel">
+      <div id="map-canvas">
+        <svg class="connectors" id="connectors"></svg>
+        <div class="map-root" id="map-root"></div>
+      </div>
+    </div>
+    <div id="detail-panel" class="collapsed">
+      <div class="detail-close">
+        <span id="detail-panel-label" style="font-size:13px;color:var(--text-soft)">Детали</span>
+        <button class="detail-close-btn" onclick="closeDetail()">×</button>
+      </div>
+      <div class="detail-body" id="detail-body"></div>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Высокий приоритет</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--amber)"></div>Средний</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Готово</div>
+  <div class="legend-item"><div class="legend-dot" style="background:var(--blue-light)"></div>В процессе</div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "REPLACE_WITH_YOUR_API_KEY",
+  authDomain: "REPLACE.firebaseapp.com",
+  projectId: "REPLACE_PROJECT_ID",
+  storageBucket: "REPLACE.firebasestorage.app",
+  messagingSenderId: "REPLACE",
+  appId: "REPLACE"
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const WORK_TAGS = ['dev','strategy','analytics','clients','leads','ux'];
+const PERSONAL_TAGS = ['kids','health','urgent','ideas','money','home','travel','rest','swedish'];
+const TAG_META = {
+  dev:{label:'💻 Разработка',group:'work'},strategy:{label:'🎯 Стратегия',group:'work'},
+  analytics:{label:'📊 Аналитика',group:'work'},clients:{label:'🤝 Клиенты',group:'work'},
+  leads:{label:'📣 Лиды',group:'work'},ux:{label:'🎨 UX',group:'work'},
+  kids:{label:'👶 Дети',group:'personal'},health:{label:'💚 Здоровье',group:'personal'},
+  urgent:{label:'🚨 Срочное',group:'personal'},ideas:{label:'💡 Идеи',group:'personal'},
+  money:{label:'💰 Деньги',group:'personal'},home:{label:'🏠 Быт',group:'personal'},
+  travel:{label:'✈️ Поездки',group:'personal'},rest:{label:'🌊 Отдых',group:'personal'},
+  swedish:{label:'🇸🇪 Шведский',group:'personal'},
+};
+
+let allTasks = [];
+
+async function load() {
+  const snap = await getDocs(collection(db, 'tasks'));
+  allTasks = snap.docs.map(d => ({id:d.id,...d.data()}));
+  document.getElementById('map-stats').textContent = allTasks.length + ' дел';
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  renderMap();
+}
+load().catch(e => {
+  document.getElementById('loading').innerHTML = `<div style="color:var(--blue-pale);padding:24px;text-align:center">Ошибка: ${e.message}</div>`;
+});
+
+function renderMap() {
+  const root = document.getElementById('map-root');
+  root.innerHTML = '';
+  const today = todayStr();
+
+  // Group tasks by tag
+  const tagGroups = {};
+  [...WORK_TAGS, ...PERSONAL_TAGS].forEach(tag => tagGroups[tag] = []);
+  const untagged = [];
+  allTasks.forEach(t => {
+    if (!t.tags || !t.tags.length) { untagged.push(t); return; }
+    t.tags.forEach(tag => { if (tagGroups[tag]) tagGroups[tag].push(t); });
+  });
+
+  // Render work group
+  const workGroup = makeRootGroup('work');
+  WORK_TAGS.forEach(tag => {
+    if (tagGroups[tag].length > 0) {
+      workGroup.appendChild(makeTagBranch(tag, tagGroups[tag], today));
+    }
+  });
+  if (workGroup.children.length > 0) root.appendChild(workGroup);
+
+  // Render personal group
+  const personalGroup = makeRootGroup('personal');
+  PERSONAL_TAGS.forEach(tag => {
+    if (tagGroups[tag].length > 0) {
+      personalGroup.appendChild(makeTagBranch(tag, tagGroups[tag], today));
+    }
+  });
+  if (personalGroup.children.length > 0) root.appendChild(personalGroup);
+
+  // Untagged
+  if (untagged.length) {
+    const el = document.createElement('div');
+    el.className = 'root-group';
+    const node = document.createElement('div');
+    node.className = 'root-node work';
+    node.textContent = '📋 Без тегов';
+    node.style.background = 'var(--surface2)';
+    node.style.color = 'var(--text-soft)';
+    const branch = document.createElement('div');
+    branch.className = 'tasks-branch';
+    untagged.forEach(t => branch.appendChild(makeTaskNode(t, today)));
+    el.appendChild(node);
+    el.appendChild(branch);
+    root.appendChild(el);
+  }
+}
+
+function makeRootGroup(type) {
+  const group = document.createElement('div');
+  group.className = 'root-group';
+  const header = document.createElement('div');
+  header.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:12px;';
+  const label = document.createElement('div');
+  label.style.cssText = `font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text-soft);padding:4px 12px;border-radius:8px;background:var(--surface2);`;
+  label.textContent = type === 'work' ? '💼 Работа' : '🌿 Личное';
+  header.appendChild(label);
+  group.appendChild(header);
+  return group;
+}
+
+function makeTagBranch(tag, tasks, today) {
+  const m = TAG_META[tag];
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;flex-direction:column;margin-bottom:16px;';
+
+  const node = document.createElement('div');
+  node.className = `root-node ${m.group}`;
+  node.textContent = m.label + ` (${tasks.length})`;
+  node.onclick = () => showTagDetail(tag, tasks);
+
+  const branch = document.createElement('div');
+  branch.className = 'tasks-branch';
+  tasks.forEach(t => branch.appendChild(makeTaskNode(t, today)));
+
+  // Add task button
+  const addBtn = document.createElement('button');
+  addBtn.className = 'add-task-node';
+  addBtn.innerHTML = '+ Добавить дело';
+  addBtn.onclick = () => {
+    localStorage.setItem('presetTag', tag);
+    window.location.href = 'add-task.html';
+  };
+  branch.appendChild(addBtn);
+
+  wrap.appendChild(node);
+  wrap.appendChild(branch);
+  return wrap;
+}
+
+function makeTaskNode(task, today) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;flex-direction:column;';
+
+  const node = document.createElement('div');
+  const priority = task.priority || 'none';
+  let urgentClass = '';
+  if (priority === 'high' || (task.tags||[]).includes('urgent')) urgentClass = 'urgent-high';
+  else if (priority === 'med') urgentClass = 'urgent-med';
+  node.className = `task-node ${urgentClass}`;
+
+  let dueHtml = '';
+  if (task.dueDate) {
+    let cls = 'due-normal';
+    if (task.dueDate < today) cls = 'due-overdue';
+    else if (task.dueDate === today) cls = 'due-today';
+    else if (daysDiff(today, task.dueDate) <= 3) cls = 'due-soon';
+    dueHtml = `<span class="task-node-due ${cls}">${fmtDate(task.dueDate)}</span>`;
+  }
+
+  const doneCount = (task.subtasks||[]).filter(s=>s.status==='done').length;
+  const subCount = (task.subtasks||[]).length;
+  const checkIcon = task.status === 'done' ? '✅' : priority === 'high' ? '🔴' : priority === 'med' ? '🟡' : '◻️';
+
+  node.innerHTML = `<span>${checkIcon}</span>
+    <span class="task-node-title">${escHtml(task.title)}</span>
+    ${dueHtml}
+    ${subCount ? `<span style="font-size:11px;color:var(--text-soft);flex-shrink:0">📌${doneCount}/${subCount}</span>` : ''}
+    <button class="node-add-btn" onclick="event.stopPropagation();addSubtaskQuick('${task.id}')">＋</button>`;
+  node.onclick = () => showTaskDetail(task);
+
+  wrap.appendChild(node);
+
+  // Subtasks
+  if (task.subtasks && task.subtasks.length) {
+    const subBranch = document.createElement('div');
+    subBranch.className = 'subtasks-branch';
+    task.subtasks.forEach((s, i) => {
+      const sNode = document.createElement('div');
+      sNode.className = `subtask-node${s.status==='done'?' s-done':''}`;
+      const dotCls = {new:'dot-new','in-progress':'dot-in-progress',blocked:'dot-blocked',done:'dot-done'}[s.status]||'dot-new';
+      sNode.innerHTML = `<div class="sub-dot ${dotCls}"></div><span>${escHtml(s.title)}</span>`;
+      sNode.onclick = () => showSubtaskDetail(task, i);
+      subBranch.appendChild(sNode);
+    });
+    wrap.appendChild(subBranch);
+  }
+
+  return wrap;
+}
+
+// ── DETAIL PANEL ──
+function openDetail(html, label) {
+  document.getElementById('detail-panel-label').textContent = label;
+  document.getElementById('detail-body').innerHTML = html;
+  document.getElementById('detail-panel').classList.remove('collapsed');
+}
+
+window.closeDetail = function() {
+  document.getElementById('detail-panel').classList.add('collapsed');
+}
+
+function showTagDetail(tag, tasks) {
+  const m = TAG_META[tag];
+  const active = tasks.filter(t => t.status !== 'done');
+  const done = tasks.filter(t => t.status === 'done');
+  let html = `<div class="detail-type">Тег</div>
+    <div class="detail-title">${m.label}</div>
+    <span class="detail-chip" style="background:var(--lav-pale);color:#4a5fa0">${tasks.length} дел</span>
+    <span class="detail-chip" style="background:var(--green-pale);color:var(--green)">${done.length} готово</span>
+    <div class="detail-section">
+      <div class="detail-section-label">Активные дела</div>
+      ${active.map(t=>`<div class="detail-subtask" onclick="openTask('${t.id}')" style="cursor:pointer">
+        <div class="detail-subtask-dot dot-in-progress"></div>
+        <div>${escHtml(t.title)}</div>
+      </div>`).join('') || '<div style="color:var(--text-soft);font-size:13px">Нет активных дел</div>'}
+    </div>
+    <button class="detail-add-btn" onclick="localStorage.setItem('presetTag','${tag}');window.location.href='add-task.html'">+ Добавить дело в этот раздел</button>`;
+  openDetail(html, m.label);
+}
+
+function showTaskDetail(task) {
+  const statusLabels = {new:'Новое','in-progress':'В процессе',blocked:'Блокер',done:'Готово'};
+  const statusColors = {new:'var(--blue-light)','in-progress':'var(--amber)',blocked:'var(--red)',done:'var(--green)'};
+  const col = statusColors[task.status] || 'var(--blue-light)';
+  const subtasks = task.subtasks || [];
+  let html = `<div class="detail-type">Дело</div>
+    <div class="detail-title">${escHtml(task.title)}</div>
+    <span class="detail-chip" style="background:${col}22;color:${col}">${statusLabels[task.status]||'Новое'}</span>
+    ${task.dueDate ? `<span class="detail-chip" style="background:var(--lav-pale);color:var(--lavender)">📅 ${fmtDate(task.dueDate)}</span>` : ''}
+    ${task.notes ? `<div style="font-size:13px;color:var(--text-soft);margin-top:10px;line-height:1.5">${escHtml(task.notes)}</div>` : ''}`;
+
+  if (subtasks.length) {
+    const dotCls = {new:'dot-new','in-progress':'dot-in-progress',blocked:'dot-blocked',done:'dot-done'};
+    html += `<div class="detail-section">
+      <div class="detail-section-label">Подзадачи (${subtasks.filter(s=>s.status==='done').length}/${subtasks.length})</div>
+      ${subtasks.map(s=>`<div class="detail-subtask">
+        <div class="detail-subtask-dot ${dotCls[s.status]||'dot-new'}"></div>
+        <div>
+          <div style="${s.status==='done'?'text-decoration:line-through;opacity:.6':''}">${escHtml(s.title)}</div>
+          ${s.note?`<div style="font-size:11px;color:var(--text-soft);margin-top:2px">${escHtml(s.note)}</div>`:''}
+        </div>
+      </div>`).join('')}
+    </div>`;
+  }
+  html += `<button class="detail-open-btn" onclick="openTask('${task.id}')">→ Открыть дело</button>
+    <button class="detail-add-btn" onclick="openTask('${task.id}')">+ Добавить подзадачу</button>`;
+  openDetail(html, 'Дело');
+}
+
+function showSubtaskDetail(task, idx) {
+  const s = task.subtasks[idx];
+  const statusLabels = {new:'Новое','in-progress':'В процессе',blocked:'Блокер',done:'Готово'};
+  const dotCls = {new:'dot-new','in-progress':'dot-in-progress',blocked:'dot-blocked',done:'dot-done'};
+  let html = `<div class="detail-type">Подзадача</div>
+    <div class="detail-title">${escHtml(s.title)}</div>
+    <span class="detail-chip" style="background:var(--lav-pale);color:var(--lavender)">${statusLabels[s.status]||'Новое'}</span>
+    ${s.dueDate ? `<span class="detail-chip" style="background:var(--surface2);color:var(--text-soft)">📅 ${fmtDate(s.dueDate)}</span>` : ''}
+    ${s.assigned ? `<span class="detail-chip" style="background:var(--green-pale);color:var(--green)">👤 ${escHtml(s.assigned)}</span>` : ''}
+    ${s.note ? `<div style="font-size:13px;color:var(--text-soft);margin-top:12px;line-height:1.5;padding:10px;background:var(--bg);border-radius:8px">${escHtml(s.note)}</div>` : ''}
+    <div style="margin-top:14px;font-size:12px;color:var(--text-soft)">Часть дела: <strong>${escHtml(task.title)}</strong></div>
+    <button class="detail-open-btn" onclick="openTask('${task.id}')">→ Перейти к делу</button>`;
+  openDetail(html, 'Подзадача');
+}
+
+window.openTask = function(id) {
+  localStorage.setItem('currentTaskId', id);
+  window.location.href = 'task.html';
+}
+
+window.addSubtaskQuick = function(taskId) {
+  localStorage.setItem('currentTaskId', taskId);
+  window.location.href = 'task.html';
+}
+
+// ── HELPERS ──
+function todayStr() { return new Date().toISOString().split('T')[0]; }
+function daysDiff(a, b) { return Math.round((new Date(b)-new Date(a))/(1000*60*60*24)); }
+function fmtDate(d) {
+  if (!d) return '';
+  const [y,m,day] = d.split('-');
+  const months = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+  return `${parseInt(day)} ${months[parseInt(m)-1]}`;
+}
+function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+</body>
+</html>

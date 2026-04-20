@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Мои дела">
+  <title>Мои дела</title>
+  <link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:       #f0f4f8;
+      --surface:  #ffffff;
+      --surface2: #e8eef5;
+      --border:   #dce5ef;
+      --blue:     #4a7fb5;
+      --blue-light:#7aadd4;
+      --blue-pale: #c8dcf0;
+      --lavender: #8b9fd4;
+      --lav-pale: #dde3f5;
+      --slate:    #3d5a7a;
+      --text:     #1e2d3d;
+      --text-soft:#6b83a0;
+      --white:    #ffffff;
+      --shadow:   rgba(61,90,122,0.12);
+      --green:    #5a9e82;
+      --green-pale: #ddf0ea;
+      --amber:    #c49a4a;
+      --red:      #c05a5a;
+      --tag-work-bg: #dde3f5;
+      --tag-work-text: #4a5fa0;
+      --tag-personal-bg: #ddf0ea;
+      --tag-personal-text: #3d7a62;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+
+    /* ── LOADING ── */
+    #loading{position:fixed;inset:0;background:var(--slate);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;}
+    .loading-icon{font-size:56px;animation:pulse 1.4s ease infinite;}
+    .loading-text{color:var(--blue-pale);font-family:'Spectral',serif;font-size:22px;margin-top:16px;letter-spacing:.02em;}
+    @keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.1);opacity:.8}}
+
+    /* ── HOME ── */
+    #home{display:none;flex-direction:column;min-height:100vh;}
+
+    .home-header{background:linear-gradient(135deg,var(--slate) 0%,#2e4a6a 100%);padding:52px 24px 28px;position:relative;overflow:hidden;}
+    .home-header::before{content:'';position:absolute;top:-80px;right:-80px;width:220px;height:220px;border-radius:50%;background:var(--lavender);opacity:.15;}
+    .home-header::after{content:'';position:absolute;bottom:-50px;left:-50px;width:160px;height:160px;border-radius:50%;background:var(--blue-light);opacity:.1;}
+    .home-title{font-family:'Spectral',serif;font-size:32px;color:var(--white);line-height:1.2;position:relative;z-index:1;}
+    .home-title em{color:var(--blue-pale);font-style:italic;}
+    .home-subtitle{color:var(--blue-pale);font-size:13px;font-weight:300;margin-top:6px;letter-spacing:.06em;position:relative;z-index:1;opacity:.8;}
+    .header-stats{display:flex;gap:16px;margin-top:16px;position:relative;z-index:1;}
+    .stat-chip{background:rgba(255,255,255,.12);border-radius:20px;padding:5px 12px;font-size:12px;color:var(--blue-pale);font-weight:500;border:1px solid rgba(255,255,255,.15);}
+    .stat-chip.overdue{background:rgba(192,90,90,.25);color:#f0b0b0;border-color:rgba(192,90,90,.3);}
+
+    /* ── SEARCH ── */
+    .search-wrap{padding:16px 20px 4px;}
+    .search-wrap-inner{position:relative;}
+    .search-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:15px;pointer-events:none;opacity:.5;}
+    .search-box{width:100%;padding:12px 40px 12px 42px;border-radius:14px;border:2px solid var(--border);background:var(--white);font-family:'DM Sans',sans-serif;font-size:15px;color:var(--text);outline:none;box-shadow:0 2px 8px var(--shadow);}
+    .search-box:focus{border-color:var(--blue);}
+    .search-clear{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;font-size:18px;color:var(--text-soft);cursor:pointer;display:none;padding:4px;}
+
+    /* ── TAG FILTERS ── */
+    .filter-section{padding:12px 20px 0;}
+    .filter-group{margin-bottom:8px;}
+    .filter-group-label{font-size:10px;text-transform:uppercase;letter-spacing:.15em;color:var(--text-soft);font-weight:600;margin-bottom:6px;padding-left:2px;}
+    .filter-tabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px;}
+    .filter-tabs::-webkit-scrollbar{display:none;}
+    .tab{flex-shrink:0;padding:6px 14px;border-radius:20px;font-size:12px;font-family:'DM Sans',sans-serif;font-weight:600;cursor:pointer;border:2px solid var(--border);background:var(--white);color:var(--text-soft);transition:all .2s;white-space:nowrap;}
+    .tab.active.work{background:var(--tag-work-bg);color:var(--tag-work-text);border-color:var(--lavender);}
+    .tab.active.personal{background:var(--tag-personal-bg);color:var(--tag-personal-text);border-color:#7abfa0;}
+    .tab.active.all{background:var(--slate);color:var(--white);border-color:var(--slate);}
+
+    /* ── SORT ROW ── */
+    .sort-row{display:flex;align-items:center;justify-content:space-between;padding:12px 20px 6px;}
+    .sort-label{font-size:12px;color:var(--text-soft);}
+    .sort-btn{background:none;border:none;font-size:12px;color:var(--blue);font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;}
+
+    /* ── CARDS ── */
+    .cards-grid{padding:8px 20px 120px;display:flex;flex-direction:column;gap:10px;flex:1;}
+    .no-results{text-align:center;padding:48px 20px;color:var(--text-soft);font-size:15px;}
+
+    .task-card{background:var(--white);border-radius:16px;padding:16px 16px 16px 20px;display:flex;align-items:flex-start;gap:12px;box-shadow:0 2px 12px var(--shadow);cursor:pointer;transition:transform .2s,box-shadow .2s;position:relative;overflow:hidden;border:none;width:100%;text-align:left;}
+    .task-card:active{transform:scale(.98);}
+    .task-card::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;border-radius:16px 0 0 16px;}
+    .task-card.priority-high::before{background:var(--red);}
+    .task-card.priority-med::before{background:var(--amber);}
+    .task-card.priority-low::before{background:var(--green);}
+    .task-card.priority-none::before{background:var(--border);}
+    .task-card.done-card{opacity:.6;}
+
+    .card-left{flex:1;min-width:0;}
+    .card-title{font-family:'Spectral',serif;font-size:17px;color:var(--slate);font-weight:600;line-height:1.3;}
+    .card-title.done-text{text-decoration:line-through;color:var(--text-soft);}
+    .card-meta-row{display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap;}
+    .card-due{font-size:12px;font-weight:500;padding:3px 8px;border-radius:8px;}
+    .card-due.overdue{background:#fde8e8;color:var(--red);}
+    .card-due.today{background:#fff3cd;color:#a0742a;}
+    .card-due.soon{background:#e8f4fd;color:var(--blue);}
+    .card-due.normal{background:var(--surface2);color:var(--text-soft);}
+    .card-due.no-date{background:var(--surface2);color:var(--text-soft);}
+    .card-subtasks{font-size:12px;color:var(--text-soft);}
+    .card-tag-list{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px;}
+    .card-tag{font-size:11px;padding:2px 8px;border-radius:6px;font-weight:500;}
+    .card-tag.work{background:var(--tag-work-bg);color:var(--tag-work-text);}
+    .card-tag.personal{background:var(--tag-personal-bg);color:var(--tag-personal-text);}
+
+    .card-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;}
+    .card-arrow{color:var(--blue-light);font-size:18px;}
+    .card-status-dot{width:10px;height:10px;border-radius:50%;}
+    .status-new{background:var(--blue-light);}
+    .status-in-progress{background:var(--amber);}
+    .status-blocked{background:var(--red);}
+    .status-done{background:var(--green);}
+
+    /* ── FAB GROUP ── */
+    .fab-group{position:fixed;bottom:28px;right:24px;display:flex;flex-direction:column;align-items:flex-end;gap:10px;z-index:100;}
+    .fab{width:56px;height:56px;border-radius:50%;background:var(--slate);color:var(--white);font-size:26px;border:none;cursor:pointer;box-shadow:0 4px 20px rgba(61,90,122,.4);display:flex;align-items:center;justify-content:center;transition:transform .2s;text-decoration:none;}
+    .fab:active{transform:scale(.92);}
+    .fab-ai{width:46px;height:46px;background:var(--lavender);font-size:20px;}
+    .fab-map{width:46px;height:46px;background:var(--blue-light);font-size:20px;}
+
+    /* ── ANIM ── */
+    .fade-in{animation:fadeIn .3s ease both;}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+    .stagger>*{opacity:0;animation:fadeIn .32s ease both;}
+    .stagger>*:nth-child(1){animation-delay:.04s}.stagger>*:nth-child(2){animation-delay:.08s}.stagger>*:nth-child(3){animation-delay:.12s}
+    .stagger>*:nth-child(4){animation-delay:.16s}.stagger>*:nth-child(5){animation-delay:.20s}.stagger>*:nth-child(6){animation-delay:.24s}
+    .stagger>*:nth-child(7){animation-delay:.28s}.stagger>*:nth-child(8){animation-delay:.32s}.stagger>*:nth-child(9){animation-delay:.36s}
+    .stagger>*:nth-child(10){animation-delay:.40s}.stagger>*:nth-child(11){animation-delay:.44s}.stagger>*:nth-child(12){animation-delay:.48s}
+
+    /* ── AI CHAT DRAWER ── */
+    .chat-overlay{position:fixed;inset:0;background:rgba(30,45,61,.5);z-index:200;display:none;backdrop-filter:blur(2px);}
+    .chat-drawer{position:fixed;bottom:0;left:0;right:0;max-height:75vh;background:var(--white);border-radius:24px 24px 0 0;z-index:201;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .35s cubic-bezier(.32,1,.6,1);}
+    .chat-drawer.open{transform:translateY(0);}
+    .chat-handle{width:40px;height:4px;background:var(--border);border-radius:2px;margin:12px auto 0;}
+    .chat-header-row{display:flex;align-items:center;justify-content:space-between;padding:14px 20px 10px;}
+    .chat-title{font-family:'Spectral',serif;font-size:18px;color:var(--slate);font-weight:600;}
+    .chat-close{background:none;border:none;font-size:22px;color:var(--text-soft);cursor:pointer;padding:4px;}
+    .chat-messages{flex:1;overflow-y:auto;padding:0 16px 8px;display:flex;flex-direction:column;gap:10px;}
+    .chat-bubble{padding:10px 14px;border-radius:14px;font-size:14px;line-height:1.55;max-width:90%;}
+    .chat-bubble.user{background:var(--slate);color:var(--white);align-self:flex-end;border-bottom-right-radius:4px;}
+    .chat-bubble.ai{background:var(--lav-pale);color:var(--text);align-self:flex-start;border-bottom-left-radius:4px;}
+    .chat-bubble.ai.loading{opacity:.6;}
+    .chat-input-row{display:flex;gap:8px;padding:12px 16px 24px;border-top:1px solid var(--border);}
+    .chat-input{flex:1;padding:11px 14px;border-radius:12px;border:2px solid var(--border);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text);outline:none;resize:none;}
+    .chat-input:focus{border-color:var(--lavender);}
+    .chat-send{padding:11px 18px;border-radius:12px;background:var(--slate);color:var(--white);border:none;font-size:15px;cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:600;flex-shrink:0;}
+    .chat-send:disabled{opacity:.5;}
+  </style>
+</head>
+<body>
+
+<div id="loading">
+  <div class="loading-icon">📋</div>
+  <div class="loading-text">Загружаю дела…</div>
+</div>
+
+<div id="home">
+  <div class="home-header">
+    <div class="home-title">Мои дела<br><em>и проекты</em></div>
+    <div class="home-subtitle" id="count-label">загрузка…</div>
+    <div class="header-stats" id="header-stats"></div>
+  </div>
+
+  <div class="search-wrap">
+    <div class="search-wrap-inner">
+      <span class="search-icon">🔍</span>
+      <input class="search-box" type="text" placeholder="Поиск по делам и подзадачам…" id="search-input" oninput="onSearch()"/>
+      <button class="search-clear" id="search-clear" onclick="clearSearch()">×</button>
+    </div>
+  </div>
+
+  <div class="filter-section">
+    <div class="filter-group">
+      <div class="filter-tabs" id="filter-tabs-top">
+        <button class="tab active all" onclick="filterCards('all',this)">Все дела</button>
+        <button class="tab" onclick="filterCards('no-date',this)">📅 Без срока</button>
+        <button class="tab" onclick="filterCards('overdue',this)">🔴 Просрочено</button>
+        <button class="tab" onclick="filterCards('today',this)">⚡ Сегодня</button>
+        <button class="tab" onclick="filterCards('done',this)">✅ Завершённые</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-group-label">Работа</div>
+      <div class="filter-tabs">
+        <button class="tab" onclick="filterCards('work',this)">💼 Вся работа</button>
+        <button class="tab" onclick="filterCards('dev',this)">💻 Разработка</button>
+        <button class="tab" onclick="filterCards('strategy',this)">🎯 Стратегия</button>
+        <button class="tab" onclick="filterCards('analytics',this)">📊 Аналитика</button>
+        <button class="tab" onclick="filterCards('clients',this)">🤝 Клиенты</button>
+        <button class="tab" onclick="filterCards('leads',this)">📣 Лиды</button>
+        <button class="tab" onclick="filterCards('ux',this)">🎨 UX</button>
+      </div>
+    </div>
+    <div class="filter-group">
+      <div class="filter-group-label">Личное</div>
+      <div class="filter-tabs">
+        <button class="tab" onclick="filterCards('personal',this)">🌿 Всё личное</button>
+        <button class="tab" onclick="filterCards('kids',this)">👶 Дети</button>
+        <button class="tab" onclick="filterCards('health',this)">💚 Здоровье</button>
+        <button class="tab" onclick="filterCards('urgent',this)">🚨 Срочное</button>
+        <button class="tab" onclick="filterCards('ideas',this)">💡 Идеи</button>
+        <button class="tab" onclick="filterCards('money',this)">💰 Деньги</button>
+        <button class="tab" onclick="filterCards('home',this)">🏠 Быт</button>
+        <button class="tab" onclick="filterCards('travel',this)">✈️ Поездки</button>
+        <button class="tab" onclick="filterCards('rest',this)">🌊 Отдых</button>
+        <button class="tab" onclick="filterCards('swedish',this)">🇸🇪 Шведский</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="sort-row">
+    <span class="sort-label" id="sort-label">По сроку ↑</span>
+    <button class="sort-btn" onclick="toggleSort()">Изменить порядок</button>
+  </div>
+
+  <div class="cards-grid stagger" id="cards-grid"></div>
+
+  <div class="fab-group">
+    <a class="fab fab-map" href="mindmap.html" title="Mind map">🗺️</a>
+    <button class="fab fab-ai" onclick="openChat()" title="AI-чат">✨</button>
+    <a class="fab" href="add-task.html" title="Новое дело">+</a>
+  </div>
+</div>
+
+<!-- AI CHAT DRAWER -->
+<div class="chat-overlay" id="chat-overlay" onclick="closeChat()"></div>
+<div class="chat-drawer" id="chat-drawer">
+  <div class="chat-handle"></div>
+  <div class="chat-header-row">
+    <div class="chat-title">✨ AI-ассистент</div>
+    <button class="chat-close" onclick="closeChat()">×</button>
+  </div>
+  <div class="chat-messages" id="chat-messages">
+    <div class="chat-bubble ai">Привет! Я могу помочь с твоими делами — создать задачи, предложить подзадачи, проанализировать приоритеты. Введи свой OpenAI API key в настройках, чтобы начать.</div>
+  </div>
+  <div class="chat-input-row">
+    <textarea class="chat-input" id="chat-input" rows="1" placeholder="Напиши что нужно сделать…" onkeydown="chatKeydown(event)"></textarea>
+    <button class="chat-send" id="chat-send" onclick="sendChatMessage()">→</button>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+
+// ══ FIREBASE CONFIG — замени на свой проект ══
+const firebaseConfig = {
+  apiKey: "REPLACE_WITH_YOUR_API_KEY",
+  authDomain: "REPLACE.firebaseapp.com",
+  projectId: "REPLACE_PROJECT_ID",
+  storageBucket: "REPLACE.firebasestorage.app",
+  messagingSenderId: "REPLACE",
+  appId: "REPLACE"
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// ── STATE ──
+let allTasks = [];
+let currentFilter = 'all';
+let currentActiveTab = null;
+let searchQuery = '';
+let sortAsc = true;
+window.db = db;
+
+// ── TAG TAXONOMY ──
+const WORK_TAGS = ['dev','strategy','analytics','clients','leads','ux'];
+const PERSONAL_TAGS = ['kids','health','urgent','ideas','money','home','travel','rest','swedish'];
+const ALL_TAGS = [...WORK_TAGS, ...PERSONAL_TAGS];
+
+const TAG_META = {
+  dev:       {label:'💻 Разработка',  group:'work'},
+  strategy:  {label:'🎯 Стратегия',   group:'work'},
+  analytics: {label:'📊 Аналитика',   group:'work'},
+  clients:   {label:'🤝 Клиенты',     group:'work'},
+  leads:     {label:'📣 Лиды',        group:'work'},
+  ux:        {label:'🎨 UX',          group:'work'},
+  kids:      {label:'👶 Дети',        group:'personal'},
+  health:    {label:'💚 Здоровье',    group:'personal'},
+  urgent:    {label:'🚨 Срочное',     group:'personal'},
+  ideas:     {label:'💡 Идеи',        group:'personal'},
+  money:     {label:'💰 Деньги',      group:'personal'},
+  home:      {label:'🏠 Быт',         group:'personal'},
+  travel:    {label:'✈️ Поездки',     group:'personal'},
+  rest:      {label:'🌊 Отдых',       group:'personal'},
+  swedish:   {label:'🇸🇪 Шведский', group:'personal'},
+};
+
+// ── LOAD ──
+async function loadTasks() {
+  try {
+    const snap = await getDocs(collection(db, 'tasks'));
+    allTasks = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('home').style.display = 'flex';
+    updateHeaderStats();
+    renderCards();
+  } catch(e) {
+    document.getElementById('loading').innerHTML =
+      '<div style="color:#c8dcf0;font-size:16px;padding:24px;text-align:center;">Ошибка загрузки 😢<br><small style="opacity:.7">' + e.message + '</small><br><br><small style="opacity:.5">Проверь Firebase config в коде</small></div>';
+  }
+}
+loadTasks();
+
+// ── HEADER STATS ──
+function updateHeaderStats() {
+  const today = todayStr();
+  const overdue = allTasks.filter(t => t.status !== 'done' && t.dueDate && t.dueDate < today).length;
+  const todayCount = allTasks.filter(t => t.status !== 'done' && t.dueDate === today).length;
+  const total = allTasks.filter(t => t.status !== 'done').length;
+
+  document.getElementById('count-label').textContent = total + ' активных дел';
+  const stats = document.getElementById('header-stats');
+  stats.innerHTML = '';
+  if (overdue) stats.innerHTML += `<div class="stat-chip overdue">🔴 ${overdue} просрочено</div>`;
+  if (todayCount) stats.innerHTML += `<div class="stat-chip">⚡ ${todayCount} сегодня</div>`;
+  stats.innerHTML += `<div class="stat-chip">${allTasks.filter(t=>t.status==='done').length} завершено</div>`;
+}
+
+// ── FILTER ──
+function getFiltered() {
+  let list = [...allTasks];
+  const today = todayStr();
+
+  switch(currentFilter) {
+    case 'overdue':  list = list.filter(t => t.status !== 'done' && t.dueDate && t.dueDate < today); break;
+    case 'today':    list = list.filter(t => t.status !== 'done' && t.dueDate === today); break;
+    case 'no-date':  list = list.filter(t => !t.dueDate); break;
+    case 'done':     list = list.filter(t => t.status === 'done'); break;
+    case 'work':     list = list.filter(t => (t.tags||[]).some(tag => WORK_TAGS.includes(tag))); break;
+    case 'personal': list = list.filter(t => (t.tags||[]).some(tag => PERSONAL_TAGS.includes(tag))); break;
+    case 'all':      break;
+    default:         list = list.filter(t => (t.tags||[]).includes(currentFilter));
+  }
+
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    list = list.filter(t => {
+      const hay = [t.title, t.description, t.status,
+        ...(t.subtasks||[]).map(s => s.title + ' ' + (s.note||'') + ' ' + (s.assigned||''))
+      ].join(' ').toLowerCase();
+      return hay.includes(q);
+    });
+  }
+
+  // Sort
+  list.sort((a,b) => {
+    const da = a.dueDate || '9999-99-99';
+    const db2 = b.dueDate || '9999-99-99';
+    return sortAsc ? da.localeCompare(db2) : db2.localeCompare(da);
+  });
+
+  return list;
+}
+
+// ── RENDER CARDS ──
+window.renderCards = function() {
+  const grid = document.getElementById('cards-grid');
+  grid.innerHTML = '';
+  const list = getFiltered();
+
+  if (!list.length) {
+    grid.innerHTML = '<div class="no-results">📋 Ничего не найдено</div>';
+    return;
+  }
+
+  const today = todayStr();
+  list.forEach(t => {
+    const done = t.status === 'done';
+    const subtasks = t.subtasks || [];
+    const doneCount = subtasks.filter(s => s.status === 'done').length;
+    const priority = t.priority || 'none';
+
+    let dueClass = 'no-date', dueText = 'Без срока';
+    if (t.dueDate) {
+      if (t.dueDate < today) { dueClass='overdue'; dueText='⚠ ' + fmtDate(t.dueDate); }
+      else if (t.dueDate === today) { dueClass='today'; dueText='⚡ Сегодня'; }
+      else if (daysDiff(today, t.dueDate) <= 3) { dueClass='soon'; dueText='📅 ' + fmtDate(t.dueDate); }
+      else { dueClass='normal'; dueText='📅 ' + fmtDate(t.dueDate); }
+    }
+
+    const tags = (t.tags||[]).map(tag => {
+      const m = TAG_META[tag];
+      if (!m) return '';
+      return `<span class="card-tag ${m.group}">${m.label}</span>`;
+    }).join('');
+
+    const statusDotClass = {
+      'new':'status-new','in-progress':'status-in-progress',
+      'blocked':'status-blocked','done':'status-done'
+    }[t.status] || 'status-new';
+
+    const card = document.createElement('button');
+    card.className = `task-card priority-${priority}${done?' done-card':''}`;
+    card.innerHTML = `
+      <div class="card-left">
+        <div class="card-title${done?' done-text':''}">${escHtml(t.title)}</div>
+        <div class="card-meta-row">
+          <span class="card-due ${dueClass}">${dueText}</span>
+          ${subtasks.length ? `<span class="card-subtasks">📌 ${doneCount}/${subtasks.length} подзадач</span>` : ''}
+        </div>
+        ${tags ? `<div class="card-tag-list">${tags}</div>` : ''}
+      </div>
+      <div class="card-right">
+        <div class="card-status-dot ${statusDotClass}"></div>
+        <span class="card-arrow">›</span>
+      </div>`;
+    card.onclick = () => {
+      localStorage.setItem('currentTaskId', t.id);
+      window.location.href = 'task.html';
+    };
+    grid.appendChild(card);
+  });
+
+  grid.classList.remove('stagger'); void grid.offsetWidth; grid.classList.add('stagger');
+}
+
+// ── FILTER / SORT ──
+window.filterCards = function(filter, el) {
+  currentFilter = filter;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active','all','work','personal'));
+  el.classList.add('active');
+  if (filter === 'all') el.classList.add('all');
+  else if (WORK_TAGS.includes(filter) || filter === 'work') el.classList.add('work');
+  else if (PERSONAL_TAGS.includes(filter) || filter === 'personal') el.classList.add('personal');
+  else el.classList.add('all');
+  renderCards();
+}
+
+window.toggleSort = function() {
+  sortAsc = !sortAsc;
+  document.getElementById('sort-label').textContent = sortAsc ? 'По сроку ↑' : 'По сроку ↓';
+  renderCards();
+}
+
+window.onSearch = function() {
+  searchQuery = document.getElementById('search-input').value.trim();
+  document.getElementById('search-clear').style.display = searchQuery ? 'block' : 'none';
+  renderCards();
+}
+
+window.clearSearch = function() {
+  document.getElementById('search-input').value = '';
+  searchQuery = '';
+  document.getElementById('search-clear').style.display = 'none';
+  renderCards();
+}
+
+// ══════════════════════════════════════════════
+// AI CHAT — итерация 2
+// • Умный контекст по тегу (п.5 ТЗ)
+// • Распознавание темы запроса (п.7 ТЗ)
+// • Полный CRUD из чата: create / update / delete / add_subtask / update_subtask
+// ══════════════════════════════════════════════
+let chatHistory = [];
+
+window.openChat = function() {
+  document.getElementById('chat-overlay').style.display = 'block';
+  setTimeout(() => document.getElementById('chat-drawer').classList.add('open'), 10);
+  document.getElementById('chat-input').focus();
+}
+
+window.closeChat = function() {
+  document.getElementById('chat-drawer').classList.remove('open');
+  setTimeout(() => document.getElementById('chat-overlay').style.display = 'none', 350);
+}
+
+window.chatKeydown = function(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
+}
+
+// ── ШАБЛОН СИСТЕМНОГО ПРОМПТА ──
+// Вызывается с уже отфильтрованным контекстом (дела по теме)
+function buildSystemPrompt(contextTasks, detectedTopic) {
+  const today = todayStr();
+
+  // Полный дамп каждого дела с подзадачами
+  const taskDump = contextTasks.map(t => {
+    const subs = (t.subtasks||[]).map((s,i) =>
+      `    ${i+1}. [${s.status||'new'}] ${s.title}${s.note?' | заметка: '+s.note:''}${s.dueDate?' | срок: '+s.dueDate:''}${s.assigned?' | assigned: '+s.assigned:''}`
+    ).join('\n');
+    return `---
+ID: ${t.id}
+Название: ${t.title}
+Статус: ${t.status||'new'} | Приоритет: ${t.priority||'none'} | Срок: ${t.dueDate||'нет'}
+Теги: ${(t.tags||[]).join(', ')||'нет'}
+Заметки: ${t.notes||'нет'}
+Подзадачи (${(t.subtasks||[]).length}):
+${subs||'    нет'}`;
+  }).join('\n');
+
+  return `Ты персональный AI-ассистент по управлению задачами. Сегодня: ${today}. Отвечай на русском языке, кратко и по делу.
+
+${detectedTopic ? `ТЕМА ЗАПРОСА: ${detectedTopic}` : ''}
+
+КОНТЕКСТ — ТЕКУЩИЕ ДЕЛА:
+${taskDump || 'Дел нет'}
+
+═══ ВОЗМОЖНЫЕ ДЕЙСТВИЯ ═══
+Ты можешь выполнять действия с задачами. Когда нужно — верни JSON-блок в конце ответа.
+Каждый JSON-блок — ОДНО действие. Можно несколько блоков подряд.
+
+1. СОЗДАТЬ ДЕЛО:
+{"action":"create_task","task":{"title":"...","description":"...","tags":["tag"],"dueDate":"YYYY-MM-DD или null","priority":"high|med|low|none","status":"new","subtasks":[]}}
+
+2. ОБНОВИТЬ ДЕЛО (только изменяемые поля):
+{"action":"update_task","taskId":"ID_из_контекста","fields":{"title":"...","dueDate":"...","priority":"...","status":"...","notes":"..."}}
+
+3. УДАЛИТЬ ДЕЛО:
+{"action":"delete_task","taskId":"ID_из_контекста","confirm":true}
+
+4. ДОБАВИТЬ ПОДЗАДАЧУ к существующему делу:
+{"action":"add_subtask","taskId":"ID_из_контекста","subtask":{"title":"...","note":"...","dueDate":"YYYY-MM-DD или null","status":"new","assigned":""}}
+
+5. ОБНОВИТЬ ПОДЗАДАЧУ:
+{"action":"update_subtask","taskId":"ID_из_контекста","subtaskIndex":0,"fields":{"title":"...","status":"...","dueDate":"...","note":"...","assigned":"..."}}
+
+Поддерживаемые теги: dev, strategy, analytics, clients, leads, ux, kids, health, urgent, ideas, money, home, travel, rest, swedish
+
+ПРАВИЛА:
+- Перед удалением — уточни у пользователя если нет явного подтверждения
+- Используй реальные ID из контекста выше
+- Если пользователь просит что-то, чего нет в контексте — скажи об этом
+- Сначала текстовый ответ, потом JSON-блок(и)`;
+}
+
+// ── ОПРЕДЕЛЕНИЕ ТЕМЫ ЗАПРОСА ──
+// Два шага: сначала быстрый классификатор, потом основной вызов с полным контекстом
+async function detectTopicAndGetContext(userMessage, apiKey) {
+  // Быстрый список всех дел для классификатора (только заголовки + теги)
+  const quickList = allTasks.map(t =>
+    `[${t.id}] ${t.title} | теги: ${(t.tags||[]).join(',')}`
+  ).join('\n');
+
+  const classifierPrompt = `У пользователя есть список дел. Определи ТЕМУ запроса и верни JSON.
+
+СПИСОК ДЕЛ:
+${quickList}
+
+ЗАПРОС ПОЛЬЗОВАТЕЛЯ: "${userMessage}"
+
+Верни ТОЛЬКО JSON без пояснений:
+{
+  "topic": "краткое описание темы запроса по-русски (или null если общий вопрос)",
+  "relevantTags": ["tag1","tag2"],
+  "relevantTaskIds": ["id1","id2"],
+  "intent": "query|create|update|delete|add_subtask|mixed"
+}
+
+Теги: dev, strategy, analytics, clients, leads, ux, kids, health, urgent, ideas, money, home, travel, rest, swedish`;
+
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        max_tokens: 300,
+        temperature: 0,
+        messages: [{role:'user', content: classifierPrompt}]
+      })
+    });
+    const data = await res.json();
+    const raw = data.choices[0].message.content.trim()
+      .replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'');
+    const classified = JSON.parse(raw);
+
+    // Собираем контекстные дела по теме
+    let contextTasks = [];
+    const tagSet = new Set(classified.relevantTags || []);
+    const idSet = new Set(classified.relevantTaskIds || []);
+
+    // Дела по совпадающим тегам
+    allTasks.forEach(t => {
+      const haTag = (t.tags||[]).some(tag => tagSet.has(tag));
+      const hasId = idSet.has(t.id);
+      if (haTag || hasId) contextTasks.push(t);
+    });
+
+    // Если тема не определена или дел по теме нет — берём все активные (до 15)
+    if (!contextTasks.length) {
+      contextTasks = allTasks.filter(t => t.status !== 'done').slice(0, 15);
+    }
+
+    return { contextTasks, topic: classified.topic, intent: classified.intent };
+  } catch(e) {
+    // Fallback — берём все активные дела
+    return {
+      contextTasks: allTasks.filter(t => t.status !== 'done').slice(0, 15),
+      topic: null,
+      intent: 'query'
+    };
+  }
+}
+
+// ── ПАРСЕР И ИСПОЛНИТЕЛЬ ACTIONS ──
+async function parseAndExecuteActions(reply) {
+  // Ищем все JSON-блоки с "action" в ответе
+  const jsonBlocks = [];
+  const pattern = /\{[\s\S]*?"action"\s*:\s*"[\s\S]*?\}(?=\s*(\n\{|\n[^{]|$))/g;
+
+  // Более надёжный подход — ищем блоки от { до сбалансированной }
+  let i = 0;
+  while (i < reply.length) {
+    const start = reply.indexOf('{"action"', i);
+    if (start === -1) break;
+    let depth = 0, j = start, inStr = false, escape = false;
+    while (j < reply.length) {
+      const ch = reply[j];
+      if (escape) { escape = false; j++; continue; }
+      if (ch === '\\' && inStr) { escape = true; j++; continue; }
+      if (ch === '"') inStr = !inStr;
+      if (!inStr) {
+        if (ch === '{') depth++;
+        if (ch === '}') { depth--; if (depth === 0) { jsonBlocks.push(reply.slice(start, j+1)); i = j+1; break; } }
+      }
+      j++;
+    }
+    if (j >= reply.length) break;
+  }
+
+  if (!jsonBlocks.length) return { actions: [], messages: [] };
+
+  const results = [];
+  for (const block of jsonBlocks) {
+    try {
+      const action = JSON.parse(block);
+      const result = await executeAction(action);
+      results.push(result);
+    } catch(e) {
+      results.push({ ok: false, msg: 'Ошибка парсинга JSON: ' + e.message });
+    }
+  }
+
+  // Чистый текст ответа без JSON-блоков
+  let cleanReply = reply;
+  jsonBlocks.forEach(b => { cleanReply = cleanReply.replace(b, '').trim(); });
+
+  return { actions: results, cleanReply };
+}
+
+async function executeAction(action) {
+  switch (action.action) {
+
+    case 'create_task': {
+      const id = 'task-' + Date.now() + '-' + Math.random().toString(36).slice(2,5);
+      const task = {
+        id,
+        title: action.task.title || 'Без названия',
+        description: action.task.description || '',
+        tags: action.task.tags || [],
+        dueDate: action.task.dueDate || null,
+        priority: action.task.priority || 'none',
+        status: 'new',
+        subtasks: (action.task.subtasks || []).map(s => ({
+          title: s.title||'', note: s.note||'', dueDate: s.dueDate||null,
+          status: 'new', assigned: s.assigned||'', createdAt: new Date().toISOString()
+        })),
+        notes: '',
+        createdAt: new Date().toISOString()
+      };
+      await setDoc(doc(db, 'tasks', id), task);
+      allTasks.push(task);
+      renderCards(); updateHeaderStats();
+      return { ok: true, msg: `✅ Создано дело «${task.title}»` };
+    }
+
+    case 'update_task': {
+      const idx = allTasks.findIndex(t => t.id === action.taskId);
+      if (idx === -1) return { ok: false, msg: `❌ Дело с ID ${action.taskId} не найдено` };
+      const updated = { ...allTasks[idx], ...action.fields };
+      await setDoc(doc(db, 'tasks', action.taskId), updated);
+      allTasks[idx] = updated;
+      renderCards(); updateHeaderStats();
+      return { ok: true, msg: `✅ Дело «${updated.title}» обновлено` };
+    }
+
+    case 'delete_task': {
+      if (!action.confirm) return { ok: false, msg: '⚠️ Удаление не подтверждено' };
+      const idx = allTasks.findIndex(t => t.id === action.taskId);
+      if (idx === -1) return { ok: false, msg: `❌ Дело с ID ${action.taskId} не найдено` };
+      const title = allTasks[idx].title;
+      await deleteDoc(doc(db, 'tasks', action.taskId));
+      allTasks.splice(idx, 1);
+      renderCards(); updateHeaderStats();
+      return { ok: true, msg: `🗑 Дело «${title}» удалено` };
+    }
+
+    case 'add_subtask': {
+      const idx = allTasks.findIndex(t => t.id === action.taskId);
+      if (idx === -1) return { ok: false, msg: `❌ Дело с ID ${action.taskId} не найдено` };
+      const sub = {
+        title: action.subtask.title || '',
+        note: action.subtask.note || '',
+        dueDate: action.subtask.dueDate || null,
+        status: action.subtask.status || 'new',
+        assigned: action.subtask.assigned || '',
+        createdAt: new Date().toISOString()
+      };
+      allTasks[idx].subtasks = [...(allTasks[idx].subtasks||[]), sub];
+      await setDoc(doc(db, 'tasks', action.taskId), allTasks[idx]);
+      renderCards();
+      return { ok: true, msg: `✅ Подзадача «${sub.title}» добавлена в «${allTasks[idx].title}»` };
+    }
+
+    case 'update_subtask': {
+      const idx = allTasks.findIndex(t => t.id === action.taskId);
+      if (idx === -1) return { ok: false, msg: `❌ Дело с ID ${action.taskId} не найдено` };
+      const subs = [...(allTasks[idx].subtasks||[])];
+      const si = action.subtaskIndex;
+      if (si < 0 || si >= subs.length) return { ok: false, msg: `❌ Подзадача с индексом ${si} не найдена` };
+      subs[si] = { ...subs[si], ...action.fields };
+      allTasks[idx].subtasks = subs;
+      await setDoc(doc(db, 'tasks', action.taskId), allTasks[idx]);
+      renderCards();
+      return { ok: true, msg: `✅ Подзадача обновлена` };
+    }
+
+    default:
+      return { ok: false, msg: `⚠️ Неизвестное действие: ${action.action}` };
+  }
+}
+
+// ── ГЛАВНАЯ ФУНКЦИЯ ОТПРАВКИ ──
+window.sendChatMessage = async function() {
+  const apiKey = localStorage.getItem('openai_api_key');
+  if (!apiKey) {
+    addChatBubble('ai', '🔑 API key не найден. Открой «Новое дело» и введи OpenAI key — он сохранится автоматически.');
+    return;
+  }
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  addChatBubble('user', text);
+  chatHistory.push({ role: 'user', content: text });
+
+  const sendBtn = document.getElementById('chat-send');
+  sendBtn.disabled = true;
+  const loadingId = addChatBubble('ai', '🔍 Определяю тему…', true);
+
+  try {
+    // ШАГ 1: Классификатор — определяем тему и релевантный контекст
+    updateBubble(loadingId, '🔍 Определяю тему…');
+    const { contextTasks, topic, intent } = await detectTopicAndGetContext(text, apiKey);
+
+    // ШАГ 2: Показываем пользователю что нашли
+    if (topic) updateBubble(loadingId, `📂 Тема: ${topic} · ${contextTasks.length} дел в контексте…`);
+    else updateBubble(loadingId, `💭 Думаю… ${contextTasks.length} дел в контексте`);
+
+    // ШАГ 3: Основной вызов с полным контекстом по теме
+    const systemPrompt = buildSystemPrompt(contextTasks, topic);
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        max_tokens: 1200,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          ...chatHistory
+        ]
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message || 'OpenAI error');
+
+    const reply = data.choices[0].message.content;
+    chatHistory.push({ role: 'assistant', content: reply });
+
+    // ШАГ 4: Парсим и исполняем actions
+    const { actions, cleanReply } = await parseAndExecuteActions(reply);
+
+    // ШАГ 5: Формируем финальный ответ
+    removeBubble(loadingId);
+
+    const displayText = cleanReply || '';
+    if (displayText) addChatBubble('ai', displayText);
+
+    // Показываем результаты действий отдельными чипами
+    if (actions.length) {
+      const statusLine = actions.map(a => a.msg).join('\n');
+      addChatBubble('ai-action', statusLine);
+    }
+
+  } catch(e) {
+    removeBubble(loadingId);
+    addChatBubble('ai', '❌ Ошибка: ' + e.message);
+  }
+
+  sendBtn.disabled = false;
+}
+
+// ── UI HELPERS ──
+function addChatBubble(role, text, isLoading=false) {
+  const id = 'bubble-' + Date.now() + '-' + Math.random().toString(36).slice(2,5);
+  const msgs = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+
+  if (role === 'ai-action') {
+    div.className = 'chat-bubble ai-action';
+    div.style.cssText = 'background:var(--green-pale,#ddf0ea);color:#2d5e48;align-self:flex-start;border-bottom-left-radius:4px;white-space:pre-wrap;font-size:13px;';
+  } else {
+    div.className = `chat-bubble ${role}${isLoading?' loading':''}`;
+  }
+
+  div.id = id;
+  div.style.whiteSpace = 'pre-wrap';
+  div.textContent = text;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return id;
+}
+
+function updateBubble(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
+function removeBubble(id) {
+  const el = document.getElementById(id);
+  if (el) el.remove();
+  document.getElementById('chat-send').disabled = false;
+}
+
+// ── HELPERS ──
+function todayStr() { return new Date().toISOString().split('T')[0]; }
+function daysDiff(a, b) { return Math.round((new Date(b)-new Date(a))/(1000*60*60*24)); }
+function fmtDate(d) {
+  if (!d) return '';
+  const [y,m,day] = d.split('-');
+  const months = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+  return `${parseInt(day)} ${months[parseInt(m)-1]}`;
+}
+function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+
+</body>
+</html>

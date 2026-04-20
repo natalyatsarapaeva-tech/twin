@@ -170,13 +170,18 @@ function renderMap() {
   root.innerHTML = '';
   const today = todayStr();
 
-  // Group tasks by tag
+  // Group tasks by PRIMARY tag only (to avoid duplicates)
+  // If no primaryTag set, use first tag as fallback
   const tagGroups = {};
   [...WORK_TAGS, ...PERSONAL_TAGS].forEach(tag => tagGroups[tag] = []);
   const untagged = [];
   allTasks.forEach(t => {
-    if (!t.tags || !t.tags.length) { untagged.push(t); return; }
-    t.tags.forEach(tag => { if (tagGroups[tag]) tagGroups[tag].push(t); });
+    const tags = t.tags || [];
+    if (!tags.length) { untagged.push(t); return; }
+    // Use primaryTag if set and valid, else first tag
+    const primary = (t.primaryTag && tags.includes(t.primaryTag)) ? t.primaryTag : tags[0];
+    if (tagGroups[primary]) tagGroups[primary].push(t);
+    else untagged.push(t);
   });
 
   // Render work group
@@ -280,11 +285,14 @@ function makeTaskNode(task, today) {
   const doneCount = (task.subtasks||[]).filter(s=>s.status==='done').length;
   const subCount = (task.subtasks||[]).length;
   const checkIcon = task.status === 'done' ? '✅' : priority === 'high' ? '🔴' : priority === 'med' ? '🟡' : '◻️';
+  // Show secondary tags as small chips
+  const secondaryTags = (task.tags||[]).filter(t => t !== (task.primaryTag || task.tags[0]));
 
   node.innerHTML = `<span>${checkIcon}</span>
     <span class="task-node-title">${escHtml(task.title)}</span>
     ${dueHtml}
     ${subCount ? `<span style="font-size:11px;color:var(--text-soft);flex-shrink:0">📌${doneCount}/${subCount}</span>` : ''}
+    ${secondaryTags.length ? `<span style="font-size:10px;color:var(--text-soft);flex-shrink:0">${secondaryTags.map(t=>TAG_META[t]?.label.split(' ')[0]||t).join(' ')}</span>` : ''}
     <button class="node-add-btn" onclick="event.stopPropagation();addSubtaskQuick('${task.id}')">＋</button>`;
   node.onclick = () => showTaskDetail(task);
 

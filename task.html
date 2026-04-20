@@ -713,18 +713,121 @@ Be specific, use real data from context.`;
 window.aiDraft = async function() {
   const apiKey = await getApiKey();
   if (!apiKey) { toast('Please save your OpenAI API key first'); return; }
-  showAiResult('🔍 Gathering context…');
+
+  const el = document.getElementById('ai-result');
+  el.classList.add('open');
+
+  const STEPS = [
+    {id:'rs1', icon:'🔍', label:'Identifying research areas…'},
+    {id:'rs2', icon:'🌐', label:'Researching…'},
+    {id:'rs3', icon:'📝', label:'Compiling draft…'},
+  ];
+  el.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;padding:4px 0">
+    ${STEPS.map(s=>`<div id="${s.id}" style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text-soft);">
+      <span style="font-size:18px;width:22px;text-align:center">${s.icon}</span>
+      <span id="${s.id}-label">${s.label}</span>
+    </div>`).join('')}
+  </div>`;
+  el.scrollIntoView({behavior:'smooth', block:'nearest'});
+
+  function stepActive(id) {
+    const row = document.getElementById(id);
+    if (row) row.style.color = 'var(--text)';
+  }
+  function stepDone(id) {
+    const row = document.getElementById(id);
+    if (row) { row.style.color = 'var(--green)'; row.querySelector('span').textContent = '✓'; }
+  }
+
   try {
     const siblings = await loadSiblingTasks();
-    showAiResult('⏳ Drafting solution…');
-    const res = await callGPT(apiKey,
-      buildSystemPromptTask(siblings),
-      `Create a concrete action plan draft for task "${task.title}".
-Consider existing subtasks (don't duplicate), related tasks, deadline.
-Structure: key steps, risks, first concrete action.`
+    const sysPrompt = buildSystemPromptTask(siblings);
+
+    // STEP 1 — identify research categories
+    stepActive('rs1');
+    const planRaw = await callGPT(apiKey, sysPrompt,
+      `For the task "${task.title}", identify which research categories apply. Return ONLY a JSON array of strings from this list:
+["legal","purchases","travel_options","people_contacts","tools_services","costs_budget","timeline","risks","alternatives"]
+Return only what's actually relevant for this specific task. Minimum 1, maximum 5.`
     );
-    showAiResult(res, false, 'draft');
-  } catch(e) { showAiResult('❌ ' + e.message); }
+    let categories = [];
+    try {
+      categories = JSON.parse(planRaw.replace(/^```json\s*/m,'').replace(/^```\s*/m,'').replace(/\s*```$/m,'').trim());
+    } catch(e) { categories = ['general']; }
+    stepDone('rs1');
+
+    // Update step 2 label
+    const s2lbl = document.getElementById('rs2-label');
+    if (s2lbl) s2lbl.textContent = `Researching: ${categories.join(', ')}…`;
+    stepActive('rs2');
+
+    // STEP 2 — research each category
+    const PROMPTS = {
+      legal: 'What legal aspects, regulations, or compliance considerations are relevant? Be specific.',
+      purchases: 'What specific products, services, or tools need to be purchased or evaluated? Include rough pricing ranges.',
+      travel_options: 'What are the practical travel options, destinations, or logistics? Include specific suggestions.',
+      people_contacts: 'What types of professionals, contacts, or stakeholders need to be involved?',
+      tools_services: 'What tools, platforms, or services would be most effective here? Name specific options.',
+      costs_budget: 'What are the realistic cost and budget considerations? Give rough estimates.',
+      timeline: 'What is a realistic timeline with key milestones?',
+      risks: 'What are the top 3 risks and how to mitigate each?',
+      alternatives: 'What are the main alternative approaches? Compare pros/cons briefly.',
+      general: 'What are the key considerations and most important next steps?',
+    };
+    const research = {};
+    for (const cat of categories.slice(0,5)) {
+      const prompt = PROMPTS[cat] || `Research the ${cat} dimension of this task. Be practical and specific.`;
+      research[cat] = await callGPT(apiKey, sysPrompt,
+        `${prompt}\n\nTask context: "${task.title}". 3-5 bullet points, concise.`
+      );
+    }
+    stepDone('rs2');
+    stepActive('rs3');
+
+    // STEP 3 — compile structured draft
+    const researchBlock = Object.entries(research)
+      .map(([k,v]) => `### ${k.toUpperCase().replace(/_/g,' ')}\n${v}`).join('\n\n');
+
+    const draft = await callGPT(apiKey, sysPrompt,
+      `Write a concise actionable research brief for: "${task.title}"
+
+RESEARCH FINDINGS:
+${researchBlock}
+
+Format:
+**Summary** (2 sentences)
+**Key actions** (numbered, specific)
+**Watch out for** (top 2 risks or gotchas)
+
+Under 280 words. Be specific and immediately actionable.`
+    );
+    stepDone('rs3');
+
+    el.innerHTML = `
+      <div style="white-space:pre-wrap;font-size:13px;line-height:1.65;margin-bottom:12px">${escHtml(draft)}</div>
+      <div class="ai-result-actions">
+        <button class="ai-result-btn ai-accept" onclick="saveDraftToNotes(this)">💾 Save to Notes</button>
+        <button class="ai-result-btn ai-reject" onclick="rejectAi()">✕ Dismiss</button>
+      </div>`;
+    el.dataset.draftText = draft;
+    el.scrollIntoView({behavior:'smooth', block:'nearest'});
+
+  } catch(e) {
+    el.innerHTML = `<div style="color:var(--red);font-size:13px;padding:4px 0">❌ ${escHtml(e.message)}</div>`;
+  }
+}
+
+window.saveDraftToNotes = async function(btn) {
+  const el = document.getElementById('ai-result');
+  const draft = el.dataset.draftText || '';
+  if (!draft) return;
+  const existing = task.notes || '';
+  const sep = existing ? '\n\n---\n' : '';
+  task.notes = existing + sep + `[Research draft – ${new Date().toLocaleDateString('en-GB')}]\n${draft}`;
+  document.getElementById('t-notes').value = task.notes;
+  await save();
+  rejectAi();
+  toast('✅ Draft saved to Notes');
 }
 
 // ── ПРЕДЛОЖИТЬ ПОДЗАДАЧИ ──
@@ -739,8 +842,8 @@ window.aiSuggestSubtasks = async function() {
       buildSystemPromptTask(siblings),
       `Suggest 4-6 new subtasks for task "${task.title}".
 Don't duplicate existing subtasks. Consider related tasks context.
-Ответь ТОЛЬКО JSON-массивом без пояснений и markdown:
-[{"title":"...","note":"краткая заметка","dueDate":"YYYY-MM-DD или null","status":"new","assigned":""}]`
+Return ONLY a JSON array, no markdown:
+[{"title":"...","note":"brief note","dueDate":"YYYY-MM-DD or null","status":"new","assigned":""}]`
     );
     const clean = res.replace(/^```json\s*/m,'').replace(/^```\s*/m,'').replace(/\s*```$/m,'').trim();
     try {
@@ -764,7 +867,7 @@ window.openAiInput = function() {
     <div style="font-size:13px;color:var(--text-soft);margin-bottom:8px;">Paste a list of subtasks from any source:</div>
     <textarea id="ai-text-input" style="width:100%;padding:10px;border-radius:9px;border:2px solid var(--border);font-family:'DM Sans',sans-serif;font-size:13px;resize:vertical;min-height:100px;outline:none;" placeholder="- Call the client&#10;- Prepare proposal by Friday&#10;- Sync with team"></textarea>
     <div style="display:flex;gap:8px;margin-top:8px;">
-      <button class="ai-result-btn ai-accept" onclick="parseTextInput()" style="flex:1">✨ Разобрать</button>
+      <button class="ai-result-btn ai-accept" onclick="parseTextInput()" style="flex:1">✨ Parse</button>
       <button class="ai-result-btn ai-reject" onclick="rejectAi()">✕</button>
     </div>`;
   document.getElementById('ai-text-input')?.focus();
@@ -797,7 +900,7 @@ async function aiParseSubtasks(text) {
     const arr = JSON.parse(clean);
     pendingAiSubtasks = arr;
     const preview = arr.map((s,i) => `${i+1}. ${s.title}${s.note?' — '+s.note:''}`).join('\n');
-    showAiResult(`📋 Нашёл ${arr.length} подзадач:\n\n${preview}`, true, 'subtasks');
+    showAiResult(`📋 Found ${arr.length} subtasks:\n\n${preview}`, true, 'subtasks');
   } catch(e) { showAiResult('❌ ' + e.message); }
 }
 
@@ -808,8 +911,8 @@ function showAiResult(text, showActions=false, type='') {
   el.innerHTML = `<div style="white-space:pre-wrap;font-size:13px;line-height:1.6">${escHtml(text)}</div>`;
   if (showActions && type === 'subtasks') {
     el.innerHTML += `<div class="ai-result-actions">
-      <button class="ai-result-btn ai-accept" onclick="acceptAiSubtasks()">✅ Добавить все</button>
-      <button class="ai-result-btn ai-reject" onclick="rejectAi()">✕ Отклонить</button>
+      <button class="ai-result-btn ai-accept" onclick="acceptAiSubtasks()">✅ Accept selected</button>
+      <button class="ai-result-btn ai-reject" onclick="rejectAi()">✕ Dismiss</button>
     </div>`;
   }
   el.scrollIntoView({behavior:'smooth', block:'nearest'});

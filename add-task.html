@@ -97,6 +97,7 @@
 
 <div class="header">
   <a class="back-link" href="index.html">← Back</a>
+  <a class="back-link" href="context.html" style="margin-left:auto;opacity:.7">🧠 Context</a>
   <h1>New Task</h1>
   <p>Fill in the form or use AI to add tasks in bulk</p>
 </div>
@@ -287,6 +288,11 @@ window.saveTask = async function() {
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
     await setDoc(doc(db, 'tasks', id), task);
+    // Fire-and-forget tag summary update
+    if (task.tags.length) {
+      const ak = document.getElementById('api-key').value.trim() || localStorage.getItem('openai_api_key') || '';
+      if (ak) triggerTagSummaryFromAdd(task.tags, ak);
+    }
     toast('✅ Task saved!');
     setTimeout(() => window.location.href = 'index.html', 1200);
   } catch(e) {
@@ -469,6 +475,39 @@ window.analyzeBatchImage = async function(){
   } catch(e){toast('❌ '+e.message);}
   btn.textContent='✨ Parse and add';
 };
+
+// Fire-and-forget tag summary update after task save
+async function triggerTagSummaryFromAdd(tags, apiKey) {
+  try {
+    const { getDocs, collection: _col, doc: _doc, setDoc: _setDoc, getFirestore: _gf } = 
+      await import("https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js");
+    const _db = _gf(app);
+    const snap = await getDocs(_col(_db, 'tasks'));
+    const allTasks = snap.docs.map(d => ({id:d.id,...d.data()}));
+    for (const tagId of tags) {
+      const tagTasks = allTasks.filter(t => (t.tags||[]).includes(tagId));
+      if (!tagTasks.length) continue;
+      const taskList = tagTasks.map(t =>
+        `[${t.status}] ${t.title}${t.notes?' | '+t.notes.slice(0,80):''}${(t.subtasks||[]).length?' | '+t.subtasks.length+' subtasks':''}`
+      ).join('\n');
+      const TAG_LABELS = {dev:'Dev',strategy:'Strategy',analytics:'Analytics',clients:'Clients',
+        leads:'Leads',ux:'UX',kids:'Kids',health:'Health',urgent:'Urgent',ideas:'Ideas',
+        money:'Money',home:'Home',travel:'Travel',rest:'Rest',swedish:'Swedish'};
+      const res = await fetch('https://api.openai.com/v1/chat/completions',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
+        body:JSON.stringify({model:'gpt-4o',max_tokens:200,temperature:0.3,messages:[
+          {role:'system',content:'Write a 3-5 sentence project summary for an AI assistant. Cover: current status, main open items, recently completed. Be specific. English only.'},
+          {role:'user',content:`Area: ${TAG_LABELS[tagId]||tagId}\n\nTasks:\n${taskList}`}
+        ]})
+      });
+      const data = await res.json();
+      const summary = data.choices[0].message.content.trim();
+      await _setDoc(_doc(_db,'contexts','tag-'+tagId),
+        {taskSummary:summary,summaryUpdatedAt:new Date().toISOString()},{merge:true});
+    }
+  } catch(e) { /* silent */ }
+}
 
 function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function toast(msg) {

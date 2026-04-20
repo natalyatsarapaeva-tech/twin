@@ -157,6 +157,7 @@
     .chat-img-btn{width:38px;height:38px;border-radius:10px;border:2px solid var(--border);background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;flex-shrink:0;align-self:flex-end;margin-bottom:2px;transition:border-color .2s;}
     .chat-img-btn:hover{border-color:var(--lavender);}
   </style>
+  <script src="voice.js"></script>
 </head>
 <body>
 
@@ -220,11 +221,12 @@
   <div class="filter-section">
     <div class="filter-group">
       <div class="filter-tabs" id="filter-tabs-top">
-        <button class="tab active all" onclick="filterCards('all',this)">All tasks</button>
+        <button class="tab active all" onclick="filterCards('all',this)">🏠 Active</button>
         <button class="tab" onclick="filterCards('no-date',this)">📅 No date</button>
         <button class="tab" onclick="filterCards('overdue',this)">🔴 Overdue</button>
         <button class="tab" onclick="filterCards('today',this)">⚡ Today</button>
-        <button class="tab" onclick="filterCards('done',this)">✅ Completed</button>
+        <button class="tab" onclick="filterCards('done-today',this)">✅ Done today</button>
+        <button class="tab" onclick="filterCards('done',this)">📂 All completed</button>
       </div>
     </div>
     <div class="filter-group">
@@ -277,6 +279,7 @@
   <div class="chat-handle"></div>
   <div class="chat-header-row">
     <div class="chat-title">✨ AI Assistant</div>
+    <div id="chat-lang-toggle-wrap"></div>
     <button class="chat-close" onclick="closeChat()">×</button>
   </div>
   <div class="chat-messages" id="chat-messages">
@@ -360,7 +363,7 @@ async function loadTasks() {
     renderCards();
   } catch(e) {
     document.getElementById('loading').innerHTML =
-      '<div style="color:#c8dcf0;font-size:16px;padding:24px;text-align:center;">Ошибка загрузки 😢<br><small style="opacity:.7">' + e.message + '</small><br><br><small style="opacity:.5">Check Firebase config in code</small></div>';
+      '<div style="color:#c8dcf0;font-size:16px;padding:24px;text-align:center;">Load error 😢<br><small style="opacity:.7">' + e.message + '</small><br><br><small style="opacity:.5">Check Firebase config in code</small></div>';
   }
 }
 loadTasks();
@@ -377,7 +380,7 @@ function updateHeaderStats() {
   const stats = document.getElementById('header-stats');
   stats.innerHTML = '';
   if (overdue) stats.innerHTML += `<div class="stat-chip overdue">🔴 ${overdue} overdue</div>`;
-  if (todayCount) stats.innerHTML += `<div class="stat-chip">⚡ ${todayCount} сегодня</div>`;
+  if (todayCount) stats.innerHTML += `<div class="stat-chip">⚡ ${todayCount} today</div>`;
   stats.innerHTML += `<div class="stat-chip">${allTasks.filter(t=>t.status==='done').length} completed</div>`;
 }
 
@@ -387,14 +390,25 @@ function getFiltered() {
   const today = todayStr();
 
   switch(currentFilter) {
-    case 'overdue':  list = list.filter(t => t.status !== 'done' && t.dueDate && t.dueDate < today); break;
-    case 'today':    list = list.filter(t => t.status !== 'done' && t.dueDate === today); break;
-    case 'no-date':  list = list.filter(t => !t.dueDate); break;
-    case 'done':     list = list.filter(t => t.status === 'done'); break;
-    case 'work':     list = list.filter(t => (t.tags||[]).some(tag => WORK_TAGS.includes(tag))); break;
-    case 'personal': list = list.filter(t => (t.tags||[]).some(tag => PERSONAL_TAGS.includes(tag))); break;
-    case 'all':      break;
-    default:         list = list.filter(t => (t.tags||[]).includes(currentFilter));
+    case 'all':
+      // Default: active tasks + tasks completed today
+      list = list.filter(t =>
+        t.status !== 'done' ||
+        (t.doneAt && t.doneAt.startsWith(today)) ||
+        (t.status === 'done' && t.dueDate === today)
+      );
+      break;
+    case 'overdue':    list = list.filter(t => t.status !== 'done' && t.dueDate && t.dueDate < today); break;
+    case 'today':      list = list.filter(t => t.status !== 'done' && t.dueDate === today); break;
+    case 'no-date':    list = list.filter(t => t.status !== 'done' && !t.dueDate); break;
+    case 'done-today': list = list.filter(t => t.status === 'done' &&
+                          ((t.doneAt && t.doneAt.startsWith(today)) || t.dueDate === today)); break;
+    case 'done':       list = list.filter(t => t.status === 'done'); break;
+    case 'work':       list = list.filter(t => t.status !== 'done' && (t.tags||[]).some(tag => WORK_TAGS.includes(tag))); break;
+    case 'personal':   list = list.filter(t => t.status !== 'done' && (t.tags||[]).some(tag => PERSONAL_TAGS.includes(tag))); break;
+    default:           list = list.filter(t =>
+                          (t.status !== 'done' || (t.doneAt && t.doneAt.startsWith(today))) &&
+                          (t.tags||[]).includes(currentFilter));
   }
 
   if (searchQuery) {
@@ -550,6 +564,13 @@ window.openChat = function() {
   document.getElementById('chat-input').focus();
   chatUserMessageCount = 0;
   lastDetectedTags = [];
+  // Attach voice to chat input (once)
+  if (!document.querySelector('#chat-input').closest('.voice-wrap')) {
+    attachVoiceBtn(document.getElementById('chat-input'));
+  }
+  // Lang toggle in header (once)
+  const wrap = document.getElementById('chat-lang-toggle-wrap');
+  if (wrap && !wrap.hasChildNodes()) createLangToggle(wrap);
 }
 
 window.closeChat = async function() {

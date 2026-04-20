@@ -155,6 +155,7 @@
     #toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--slate);color:var(--white);padding:12px 22px;border-radius:12px;font-size:14px;font-weight:600;transition:transform .3s;z-index:999;white-space:nowrap;}
     #toast.show{transform:translateX(-50%) translateY(0);}
   </style>
+  <script src="voice.js"></script>
 </head>
 <body>
 
@@ -165,7 +166,7 @@
     <button class="back-btn" onclick="goBack()">← All tasks</button>
     <div class="task-title-wrap">
       <div class="task-title" id="t-title">—</div>
-      <button class="edit-btn" onclick="openEditModal()">✏️ Изменить</button>
+      <div style="display:flex;gap:8px;align-items:center"><div id="task-lang-wrap"></div><button class="edit-btn" onclick="openEditModal()">✏️ Edit</button></div>
     </div>
     <div class="task-meta-row" id="t-meta-row"></div>
     <div class="status-bar">
@@ -346,6 +347,11 @@ async function load() {
   render();
   document.getElementById('loading').style.display = 'none';
   document.getElementById('task-page').style.display = 'block';
+  // Attach voice input
+  attachVoiceBtn(document.getElementById('t-notes'));
+  // Lang toggle
+  const tlw = document.getElementById('task-lang-wrap');
+  if (tlw) createLangToggle(tlw);
 }
 load().catch(e => {
   document.getElementById('loading').innerHTML = `<div style="color:#c8dcf0;padding:24px;text-align:center">Ошибка: ${e.message}</div>`;
@@ -481,6 +487,13 @@ window.removeTag = async function(tag) {
 // ── SUBTASKS ──
 window.toggleAddSubtask = function() {
   document.getElementById('add-subtask-form').classList.toggle('open');
+  // Attach voice to subtask title and note fields (once)
+  setTimeout(() => {
+    const ti = document.getElementById('sub-title');
+    const ni = document.getElementById('sub-note');
+    if (ti && !ti.closest('.voice-wrap')) attachVoiceBtn(ti);
+    if (ni && !ni.closest('.voice-wrap')) attachVoiceBtn(ni);
+  }, 50);
 }
 
 window.addSubtask = async function() {
@@ -700,6 +713,10 @@ window.openAiInput = function() {
       <button class="ai-result-btn ai-reject" onclick="rejectAi()">✕</button>
     </div>`;
   document.getElementById('ai-text-input')?.focus();
+  setTimeout(() => {
+    const ai = document.getElementById('ai-text-input');
+    if (ai && !ai.closest('.voice-wrap')) attachVoiceBtn(ai);
+  }, 50);
 }
 
 window.parseTextInput = async function() {

@@ -147,7 +147,18 @@
     /* DELETE TASK */
     .delete-btn{margin:16px 16px 0;padding:14px;background:none;border:2px solid var(--red);color:var(--red);border-radius:14px;width:calc(100% - 32px);font-size:14px;cursor:pointer;font-family:'DM Sans',sans-serif;}
 
-    /* ANIM */
+    /* ── DONE / ARCHIVED STYLE ── */
+    .task-header.is-done{background:linear-gradient(135deg,#4a4a5a 0%,#36363f 100%);}
+    .task-header.is-done::before{background:#888;}
+    body.task-is-done .section{background:var(--surface2);box-shadow:none;}
+    body.task-is-done .subtask-item{background:#e0e4ea;}
+    body.task-is-done .notes-textarea{background:#e8eaed;color:var(--text-soft);}
+    body.task-is-done .task-title{color:#ccc;}
+    body.task-is-done .ai-section{background:#e8eaed;}
+    body.task-is-done .ingredients-box{background:#e0e4ea;}
+    .done-archive-banner{background:#e0e4ea;border-radius:10px;padding:8px 14px;font-size:12px;color:#6b7280;text-align:center;margin:12px 16px 0;font-style:italic;}
+
+    /* ── ANIM */
     .fade-in{animation:fadeIn .3s ease both;}
     @keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 
@@ -163,10 +174,13 @@
 
 <div id="task-page" style="display:none">
   <div class="task-header">
-    <button class="back-btn" onclick="goBack()">← All tasks</button>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <button class="back-btn" style="margin-bottom:0" onclick="goBack()">← All tasks</button>
+      <div id="task-lang-wrap" style="margin-left:auto"></div>
+    </div>
     <div class="task-title-wrap">
       <div class="task-title" id="t-title">—</div>
-      <div style="display:flex;gap:8px;align-items:center"><div id="task-lang-wrap"></div><button class="edit-btn" onclick="openEditModal()">✏️ Edit</button></div>
+      <button class="edit-btn" onclick="openEditModal()">✏️ Edit</button>
     </div>
     <div class="task-meta-row" id="t-meta-row"></div>
     <div class="status-bar">
@@ -197,7 +211,7 @@
     <!-- SUBTASKS -->
     <div class="section">
       <div class="section-title">
-        📌 Подзадачи
+        📌 Subtasks
         <span class="section-action" onclick="toggleAddSubtask()">+ Add</span>
       </div>
       <div class="subtask-list" id="subtask-list"></div>
@@ -362,6 +376,21 @@ function render() {
   document.getElementById('t-title').textContent = task.title || '—';
   document.getElementById('t-notes').value = task.notes || '';
 
+  // Archived/done visual style
+  const isDone = task.status === 'done';
+  document.querySelector('.task-header').classList.toggle('is-done', isDone);
+  document.body.classList.toggle('task-is-done', isDone);
+  // Show archive banner
+  const existing = document.querySelector('.done-archive-banner');
+  if (existing) existing.remove();
+  if (isDone) {
+    const banner = document.createElement('div');
+    banner.className = 'done-archive-banner';
+    const doneDate = task.doneAt ? ' on ' + fmtDate(task.doneAt.split('T')[0]) : '';
+    banner.textContent = `✓ Completed${doneDate} — archived`;
+    document.querySelector('.task-body').insertAdjacentElement('afterbegin', banner);
+  }
+
   // Meta chips
   const today = todayStr();
   let chips = '';
@@ -388,10 +417,15 @@ function render() {
 
 function renderTags() {
   const wrap = document.getElementById('tags-wrap');
+  const primary = task.primaryTag || null;
   wrap.innerHTML = (task.tags||[]).map(tag => {
     const m = TAG_META[tag];
     if (!m) return '';
-    return `<span class="tag-pill ${m.group}" onclick="removeTag('${tag}')">
+    const isPrimary = tag === primary;
+    return `<span class="tag-pill ${m.group}" style="${isPrimary?'outline:2px solid var(--blue);outline-offset:1px;':''}"
+      title="${isPrimary?'Primary tag — click ★ to change':'Click ★ to set as primary'}"
+      onclick="removeTag('${tag}')">
+      <span onclick="event.stopPropagation();setPrimaryTag('${tag}')" style="cursor:pointer;opacity:${isPrimary?'1':'0.4'};font-size:11px;" title="Set as primary tag">★</span>
       ${m.label}<span class="tag-pill-del">×</span>
     </span>`;
   }).join('');
@@ -400,8 +434,16 @@ function renderTags() {
   dropdown.innerHTML = ALL_TAGS.map(tag => {
     const m = TAG_META[tag];
     const sel = (task.tags||[]).includes(tag);
-    return `<button class="tag-opt${sel?' selected':''}" onclick="toggleTag('${tag}',this)">${m.label}</button>`;
+    const isPrimary = tag === primary;
+    return `<button class="tag-opt${sel?' selected':''}" onclick="toggleTag('${tag}',this)">${isPrimary?'★ ':''}${m.label}</button>`;
   }).join('');
+}
+
+window.setPrimaryTag = async function(tag) {
+  task.primaryTag = (task.primaryTag === tag) ? null : tag; // toggle
+  renderTags();
+  await save();
+  toast(task.primaryTag ? `★ Primary tag: ${TAG_META[tag]?.label}` : 'Primary tag cleared');
 }
 
 function renderSubtasks() {
@@ -576,6 +618,16 @@ window.openEditModal = function() {
   document.getElementById('edit-title').value = task.title || '';
   document.getElementById('edit-due').value = task.dueDate || '';
   document.getElementById('edit-priority').value = task.priority || 'none';
+  // Populate primary tag dropdown
+  const ptSel = document.getElementById('edit-primary-tag');
+  if (ptSel) {
+    ptSel.innerHTML = '<option value="">None</option>' +
+      (task.tags||[]).map(tag => {
+        const m = TAG_META[tag];
+        const sel = tag === (task.primaryTag||'');
+        return `<option value="${tag}"${sel?' selected':''}>${m?m.label:tag}</option>`;
+      }).join('');
+  }
   document.getElementById('edit-overlay').style.display = 'block';
   setTimeout(() => document.getElementById('edit-modal').classList.add('open'), 10);
 }
@@ -589,6 +641,9 @@ window.saveEditModal = async function() {
   task.title = document.getElementById('edit-title').value.trim();
   task.dueDate = document.getElementById('edit-due').value || null;
   task.priority = document.getElementById('edit-priority').value;
+  // primaryTag selector in edit modal
+  const ptSel = document.getElementById('edit-primary-tag');
+  if (ptSel) task.primaryTag = ptSel.value || null;
   await save();
   if (task.tags && task.tags.length) triggerTagSummaryUpdate(task.tags);
   render();

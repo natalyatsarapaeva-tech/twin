@@ -125,7 +125,8 @@
     .fab:active{transform:scale(.92);}
     .fab-ai{width:46px;height:46px;background:var(--lavender);font-size:20px;}
     .fab-map{width:46px;height:46px;background:var(--blue-light);font-size:20px;}
-    .fab-ctx{width:46px;height:46px;background:var(--lav-pale);font-size:20px;color:var(--lavender);}
+    .fab-ctx{width:46px;height:46px;background:var(--lav-pale);font-size:13px;color:var(--lavender);font-weight:800;letter-spacing:-.5px;font-family:'DM Sans',sans-serif;}
+    .fab-cx-text{background:linear-gradient(135deg,#8b9fd4,#c9a0a0);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-size:14px;font-weight:800;letter-spacing:-.3px;}
 
     /* ── ANIM ── */
     .fade-in{animation:fadeIn .3s ease both;}
@@ -260,14 +261,30 @@
 
   <div class="sort-row">
     <span class="sort-label" id="sort-label">By due date ↑</span>
-    <button class="sort-btn" onclick="toggleSort()">Reverse order</button>
+    <div style="display:flex;gap:10px;align-items:center;">
+      <button class="sort-btn" id="monthly-btn" onclick="openMonthlySuggestions()" style="color:var(--lavender);">✨ This month</button>
+      <button class="sort-btn" onclick="toggleSort()">↕ Sort</button>
+    </div>
+  </div>
+  <!-- Monthly suggestions panel -->
+  <div id="monthly-panel" style="display:none;margin:0 20px 12px;background:linear-gradient(135deg,var(--lav-pale),#eef1fc);border-radius:16px;padding:16px;box-shadow:0 2px 10px var(--shadow);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <span style="font-size:13px;font-weight:700;color:var(--slate);">✨ Suggestions for <span id="monthly-month"></span></span>
+      <button onclick="closeMonthlySuggestions()" style="background:none;border:none;font-size:18px;color:var(--text-soft);cursor:pointer;">×</button>
+    </div>
+    <div id="monthly-loading" style="font-size:13px;color:var(--text-soft);padding:8px 0;">⏳ Generating suggestions…</div>
+    <div id="monthly-list" style="display:none;display:flex;flex-direction:column;gap:8px;"></div>
+    <div id="monthly-actions" style="display:none;margin-top:10px;display:flex;gap:8px;">
+      <button onclick="acceptMonthlySuggestions()" style="flex:1;padding:10px;border-radius:10px;background:var(--slate);color:var(--white);border:none;font-size:13px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;">💾 Add selected</button>
+      <button onclick="closeMonthlySuggestions()" style="padding:10px 14px;border-radius:10px;background:var(--white);color:var(--text-soft);border:2px solid var(--border);font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;">Dismiss</button>
+    </div>
   </div>
 
   <div class="cards-grid stagger" id="cards-grid"></div>
 
   <div class="fab-group">
     <a class="fab fab-map" href="mindmap.html" title="Mind map">🗺️</a>
-    <a class="fab fab-ctx" href="context.html" title="Wide context">🧠</a>
+    <a class="fab fab-ctx" href="context.html" title="Context"><span class="fab-cx-text">CX</span></a>
     <button class="fab fab-ai" onclick="openChat()" title="AI chat">✨</button>
     <a class="fab" href="add-task.html" title="New task">+</a>
   </div>
@@ -360,7 +377,9 @@ async function loadTasks() {
     document.getElementById('loading').style.display = 'none';
     document.getElementById('home').style.display = 'flex';
     updateHeaderStats();
+    restoreSavedFilter();
     renderCards();
+    checkRecurringTasks();
   } catch(e) {
     document.getElementById('loading').innerHTML =
       '<div style="color:#c8dcf0;font-size:16px;padding:24px;text-align:center;">Load error 😢<br><small style="opacity:.7">' + e.message + '</small><br><br><small style="opacity:.5">Check Firebase config in code</small></div>';
@@ -485,6 +504,7 @@ window.renderCards = function() {
       </div>`;
     card.onclick = () => {
       localStorage.setItem('currentTaskId', t.id);
+      localStorage.setItem('savedFilter', currentFilter);
       window.location.href = 'task.html';
     };
     grid.appendChild(card);
@@ -503,6 +523,26 @@ window.filterCards = function(filter, el) {
   else if (PERSONAL_TAGS.includes(filter) || filter === 'personal') el.classList.add('personal');
   else el.classList.add('all');
   renderCards();
+}
+
+// ── RESTORE SAVED FILTER (after task navigation) ──
+function restoreSavedFilter() {
+  const saved = localStorage.getItem('savedFilter');
+  if (!saved || saved === 'all') return;
+  localStorage.removeItem('savedFilter');
+  currentFilter = saved;
+  // Find and activate the matching tab
+  document.querySelectorAll('.tab').forEach(btn => {
+    const onclick = btn.getAttribute('onclick') || '';
+    const match = onclick.match(/filterCards\('([^']+)'/);
+    if (match && match[1] === saved) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active','all','work','personal'));
+      btn.classList.add('active');
+      if (WORK_TAGS.includes(saved) || saved === 'work') btn.classList.add('work');
+      else if (PERSONAL_TAGS.includes(saved) || saved === 'personal') btn.classList.add('personal');
+      else btn.classList.add('all');
+    }
+  });
 }
 
 window.toggleSort = function() {
@@ -1101,6 +1141,175 @@ function removeBubble(id) {
   if (el) el.remove();
   document.getElementById('chat-send').disabled = false;
 }
+
+// ══ RECURRING TASKS ══
+async function checkRecurringTasks() {
+  const today = todayStr();
+  const toCreate = allTasks.filter(t => t.recurring && t.recurring.nextDue && t.recurring.nextDue <= today);
+  for (const template of toCreate) {
+    // Create new task instance
+    const newId = 'task-' + Date.now() + '-' + Math.random().toString(36).slice(2,5);
+    const newTask = {
+      ...template,
+      id: newId,
+      status: 'new',
+      dueDate: template.recurring.nextDue,
+      doneAt: null,
+      notes: '',
+      subtasks: (template.subtasks||[]).map(s => ({...s, status:'new', doneAt:null})),
+      createdAt: new Date().toISOString(),
+      recurring: null // instance has no recurring — only template does
+    };
+    // Advance nextDue on template
+    const rec = template.recurring;
+    const next = advanceDate(rec.nextDue, rec.frequency, rec.interval || 1);
+    const updatedTemplate = {...template, recurring: {...rec, nextDue: next}};
+    try {
+      await setDoc(doc(db,'tasks',newId), newTask);
+      await setDoc(doc(db,'tasks',template.id), updatedTemplate);
+      allTasks.push(newTask);
+      const idx = allTasks.findIndex(t=>t.id===template.id);
+      if (idx>=0) allTasks[idx] = updatedTemplate;
+    } catch(e) { console.error('Recurring task error:', e); }
+  }
+  if (toCreate.length) { renderCards(); updateHeaderStats(); }
+}
+
+function advanceDate(dateStr, frequency, interval) {
+  const d = new Date(dateStr + 'T12:00:00');
+  switch(frequency) {
+    case 'daily':   d.setDate(d.getDate() + interval); break;
+    case 'weekly':  d.setDate(d.getDate() + 7 * interval); break;
+    case 'monthly': d.setMonth(d.getMonth() + interval); break;
+    case 'yearly':  d.setFullYear(d.getFullYear() + interval); break;
+  }
+  return d.toISOString().split('T')[0];
+}
+
+// ══ MONTHLY SUGGESTIONS ══
+let monthlySuggestions = [];
+let monthlySelected = [];
+
+window.openMonthlySuggestions = async function() {
+  const apiKey = localStorage.getItem('openai_api_key');
+  if (!apiKey) { alert('Please save your OpenAI API key first'); return; }
+
+  // Check if already generated this month
+  const thisMonth = todayStr().slice(0,7); // YYYY-MM
+  const lastGen = localStorage.getItem('monthlyGenerated');
+  
+  const panel = document.getElementById('monthly-panel');
+  const monthLabel = document.getElementById('monthly-month');
+  const loading = document.getElementById('monthly-loading');
+  const list = document.getElementById('monthly-list');
+  const actions = document.getElementById('monthly-actions');
+  
+  panel.style.display = 'block';
+  monthLabel.textContent = new Date().toLocaleString('en-US', {month:'long', year:'numeric'});
+  loading.style.display = 'block';
+  list.style.display = 'none';
+  actions.style.display = 'none';
+  monthlySuggestions = [];
+  panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+
+  try {
+    // Build context from all tag profiles
+    const tagCtxParts = [];
+    for (const tagId of ALL_TAGS) {
+      try {
+        const snap = await getDoc(doc(db,'contexts','tag-'+tagId));
+        if (snap.exists() && snap.data().profile) {
+          tagCtxParts.push(`${TAG_META[tagId].label}: ${snap.data().profile}`);
+        }
+      } catch(e) {}
+    }
+    const userSnap = await getDoc(doc(db,'contexts','user'));
+    const userProfile = userSnap.exists() ? (userSnap.data().profile||'') : '';
+
+    const month = new Date().toLocaleString('en-US', {month:'long'});
+    const season = ['December','January','February'].includes(month) ? 'winter' :
+                   ['March','April','May'].includes(month) ? 'spring' :
+                   ['June','July','August'].includes(month) ? 'summer' : 'autumn';
+
+    const existingTitles = allTasks.filter(t=>t.status!=='done').map(t=>t.title).join(', ');
+
+    const prompt = `You are a smart personal assistant. Based on the user's context, suggest 6-8 tasks that are seasonally and contextually relevant for ${month} (${season} in Sweden).
+
+USER PROFILE:
+${userProfile || 'Not provided'}
+
+TAG CONTEXTS:
+${tagCtxParts.join('\n') || 'Not provided'}
+
+EXISTING ACTIVE TASKS (don't duplicate):
+${existingTitles || 'none'}
+
+Return ONLY a JSON array, no markdown:
+[{"title":"...","tags":["tag"],"priority":"high|med|low","reasoning":"1 sentence why relevant for ${month}"}]
+
+Supported tags: dev,strategy,analytics,clients,leads,ux,kids,health,urgent,ideas,money,home,travel,rest,swedish
+Be specific to the month and user context. Think about seasonal tasks, monthly recurring activities, timely opportunities.`;
+
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
+      body:JSON.stringify({model:'gpt-4o',max_tokens:800,messages:[{role:'user',content:prompt}]})
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error?.message||'OpenAI error');
+    const raw = data.choices[0].message.content.trim()
+      .replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'');
+    monthlySuggestions = JSON.parse(raw);
+    monthlySelected = monthlySuggestions.map(()=>true);
+    localStorage.setItem('monthlyGenerated', thisMonth);
+
+    // Render suggestion cards
+    list.innerHTML = monthlySuggestions.map((s,i) => `
+      <div id="ms-${i}" style="background:var(--white);border-radius:10px;padding:12px;display:flex;gap:10px;align-items:flex-start;cursor:pointer;" onclick="toggleMonthly(${i})">
+        <div id="ms-check-${i}" style="width:20px;height:20px;border-radius:6px;background:var(--lavender);border:2px solid var(--lavender);color:white;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;margin-top:1px;">✓</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:500;color:var(--text);">${escHtml(s.title)}</div>
+          <div style="font-size:11px;color:var(--text-soft);margin-top:3px;">${escHtml(s.reasoning||'')} · ${(s.tags||[]).map(t=>TAG_META[t]?.label||t).join(', ')}</div>
+        </div>
+      </div>`).join('');
+
+    loading.style.display = 'none';
+    list.style.display = 'flex';
+    list.style.flexDirection = 'column';
+    list.style.gap = '6px';
+    actions.style.display = 'flex';
+  } catch(e) {
+    loading.textContent = '❌ Error: ' + e.message;
+  }
+};
+
+window.toggleMonthly = function(i) {
+  monthlySelected[i] = !monthlySelected[i];
+  const check = document.getElementById('ms-check-'+i);
+  const row = document.getElementById('ms-'+i);
+  check.style.background = monthlySelected[i] ? 'var(--lavender)' : 'var(--white)';
+  check.style.color = monthlySelected[i] ? 'white' : 'transparent';
+  check.style.borderColor = monthlySelected[i] ? 'var(--lavender)' : 'var(--border)';
+  row.style.opacity = monthlySelected[i] ? '1' : '0.45';
+};
+
+window.acceptMonthlySuggestions = async function() {
+  const toAdd = monthlySuggestions.filter((_,i)=>monthlySelected[i]);
+  for (const s of toAdd) {
+    const id = 'task-'+Date.now()+'-'+Math.random().toString(36).slice(2,5);
+    const task = {id, title:s.title, description:'', tags:s.tags||[],
+      dueDate:null, priority:s.priority||'med', status:'new',
+      subtasks:[], notes:'', createdAt:new Date().toISOString()};
+    await setDoc(doc(db,'tasks',id), task);
+    allTasks.push(task);
+  }
+  renderCards(); updateHeaderStats();
+  closeMonthlySuggestions();
+};
+
+window.closeMonthlySuggestions = function() {
+  document.getElementById('monthly-panel').style.display = 'none';
+};
 
 // ── HELPERS ──
 function todayStr() { return new Date().toISOString().split('T')[0]; }

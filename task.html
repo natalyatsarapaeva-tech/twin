@@ -307,6 +307,24 @@
       <option value="med">Medium</option>
       <option value="high">High</option>
     </select>
+    <label class="modal-label">Repeat</label>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <select class="modal-select" id="edit-repeat" onchange="toggleEditRepeatInterval()" style="flex:1;">
+        <option value="">No repeat</option>
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+        <option value="monthly">Monthly</option>
+        <option value="yearly">Yearly</option>
+      </select>
+      <div id="edit-repeat-interval-wrap" style="display:none;align-items:center;gap:6px;">
+        <span style="font-size:12px;color:var(--text-soft)">every</span>
+        <input class="modal-input" type="number" id="edit-repeat-interval" value="1" min="1" max="99"
+          style="width:60px;padding:8px;text-align:center;"/>
+        <span style="font-size:12px;color:var(--text-soft)" id="edit-repeat-unit">weeks</span>
+      </div>
+    </div>
+    <label class="modal-label">Primary tag <span style="font-size:10px;opacity:.6">(used in mind map)</span></label>
+    <select class="modal-select" id="edit-primary-tag"></select>
     <button class="modal-save" onclick="saveEditModal()">💾 Save</button>
   </div>
 </div>
@@ -401,8 +419,12 @@ function render() {
     chips += `<span class="meta-chip ${cls}">📅 ${fmtDate(task.dueDate)}</span>`;
   }
   if (task.priority && task.priority !== 'none') {
-    const pLabels = {high:'🔴 Высокий',med:'🟡 Средний',low:'🟢 Низкий'};
+    const pLabels = {high:'🔴 High',med:'🟡 Medium',low:'🟢 Low'};
     chips += `<span class="meta-chip chip-priority-${task.priority}">${pLabels[task.priority]||''}</span>`;
+  }
+  if (task.recurring) {
+    const rLabel = {daily:'daily',weekly:'weekly',monthly:'monthly',yearly:'yearly'};
+    chips += `<span class="meta-chip" style="background:var(--lav-pale);color:var(--lavender);">♻ ${rLabel[task.recurring.frequency]||''} · next: ${task.recurring.nextDue||'–'}</span>`;
   }
   document.getElementById('t-meta-row').innerHTML = chips;
 
@@ -614,10 +636,36 @@ window.deleteSubtaskModal = async function() {
 }
 
 // ── EDIT TASK MODAL ──
+window.toggleEditRepeatInterval = function() {
+  const freq = document.getElementById('edit-repeat').value;
+  const wrap = document.getElementById('edit-repeat-interval-wrap');
+  const unit = document.getElementById('edit-repeat-unit');
+  if (freq) {
+    wrap.style.display = 'flex';
+    const units = {daily:'days',weekly:'weeks',monthly:'months',yearly:'years'};
+    if (unit) unit.textContent = units[freq]||'';
+  } else {
+    wrap.style.display = 'none';
+  }
+}
+
 window.openEditModal = function() {
   document.getElementById('edit-title').value = task.title || '';
   document.getElementById('edit-due').value = task.dueDate || '';
   document.getElementById('edit-priority').value = task.priority || 'none';
+  // Populate repeat
+  const rec = task.recurring || {};
+  const repSel = document.getElementById('edit-repeat');
+  if (repSel) {
+    repSel.value = rec.frequency || '';
+    document.getElementById('edit-repeat-interval').value = rec.interval || 1;
+    if (rec.frequency) {
+      document.getElementById('edit-repeat-interval-wrap').style.display = 'flex';
+      const units = {daily:'days',weekly:'weeks',monthly:'months',yearly:'years'};
+      const u = document.getElementById('edit-repeat-unit');
+      if (u) u.textContent = units[rec.frequency]||'';
+    }
+  }
   // Populate primary tag dropdown
   const ptSel = document.getElementById('edit-primary-tag');
   if (ptSel) {
@@ -641,6 +689,19 @@ window.saveEditModal = async function() {
   task.title = document.getElementById('edit-title').value.trim();
   task.dueDate = document.getElementById('edit-due').value || null;
   task.priority = document.getElementById('edit-priority').value;
+  // Save recurring
+  const repFreq = document.getElementById('edit-repeat')?.value || '';
+  const repInt = parseInt(document.getElementById('edit-repeat-interval')?.value||'1');
+  if (repFreq) {
+    task.recurring = {
+      frequency: repFreq,
+      interval: repInt,
+      nextDue: task.recurring?.nextDue || task.dueDate || null,
+      endDate: null
+    };
+  } else {
+    task.recurring = null;
+  }
   // primaryTag selector in edit modal
   const ptSel = document.getElementById('edit-primary-tag');
   if (ptSel) task.primaryTag = ptSel.value || null;

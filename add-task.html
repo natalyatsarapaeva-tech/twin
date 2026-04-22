@@ -138,6 +138,23 @@
         </select>
       </div>
     </div>
+
+    <label class="field-label">Repeat</label>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <select class="field-input" id="f-repeat" onchange="toggleRepeatInterval()" style="flex:1;min-width:130px;">
+        <option value="">No repeat</option>
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+        <option value="monthly">Monthly</option>
+        <option value="yearly">Yearly</option>
+      </select>
+      <div id="repeat-interval-wrap" style="display:none;align-items:center;gap:6px;">
+        <span style="font-size:13px;color:var(--text-soft)">every</span>
+        <input class="field-input" type="number" id="f-repeat-interval" value="1" min="1" max="99"
+          style="width:64px;padding:11px 8px;text-align:center;"/>
+        <span style="font-size:13px;color:var(--text-soft)" id="repeat-unit-label">weeks</span>
+      </div>
+    </div>
   </div>
 
   <!-- TAGS -->
@@ -255,6 +272,18 @@ function renderTagGrid() {
     </div>`;
 }
 renderTagGrid();
+// Pre-select tag from active filter on main page
+(function() {
+  const preset = localStorage.getItem('newTaskPresetTag');
+  if (preset) {
+    localStorage.removeItem('newTaskPresetTag');
+    if (!selectedTags.includes(preset)) {
+      selectedTags.push(preset);
+      // Re-render to show selection
+      renderTagGrid();
+    }
+  }
+})();
 
 window.toggleRepeatInterval = function() {
   const freq = document.getElementById('f-repeat').value;

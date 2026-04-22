@@ -114,6 +114,11 @@
     .card-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;}
     .card-arrow{color:var(--blue-light);font-size:18px;}
     .card-status-dot{width:10px;height:10px;border-radius:50%;}
+    .card-quick-actions{display:flex;gap:4px;margin-top:6px;}
+    .card-quick-btn{padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;transition:opacity .15s;}
+    .card-quick-btn:active{opacity:.7;}
+    .cqb-today{background:#fff3cd;color:#a0742a;}
+    .cqb-done{background:var(--green-pale);color:#2d6e52;}
     .status-new{background:var(--blue-light);}
     .status-in-progress{background:var(--amber);}
     .status-blocked{background:var(--red);}
@@ -286,7 +291,7 @@
     <a class="fab fab-map" href="mindmap.html" title="Mind map">🗺️</a>
     <a class="fab fab-ctx" href="context.html" title="Context"><span class="fab-cx-text">CX</span></a>
     <button class="fab fab-ai" onclick="openChat()" title="AI chat">✨</button>
-    <a class="fab" href="add-task.html" title="New task">+</a>
+    <a class="fab" id="add-task-fab" href="add-task.html" title="New task" onclick="saveFilterForNewTask()">+</a>
   </div>
 </div>
 
@@ -302,8 +307,8 @@
   <div class="chat-messages" id="chat-messages">
     <div class="chat-bubble ai">Hey! I can help with your tasks — create tasks, suggest subtasks, analyze priorities, or answer questions. Add your OpenAI API key in 'New Task' to get started.</div>
   </div>
-  <div id="chat-img-preview" style="display:none;padding:8px 16px 0;position:relative;">
-    <canvas id="chat-annotate-canvas" style="max-width:100%;border-radius:10px;border:2px solid var(--lavender);cursor:crosshair;display:block;"></canvas>
+  <div id="chat-img-preview" style="display:none;padding:8px 16px 0;position:relative;max-height:280px;overflow-y:auto;">
+    <canvas id="chat-annotate-canvas" style="max-width:100%;max-height:200px;object-fit:contain;border-radius:10px;border:2px solid var(--lavender);cursor:crosshair;display:block;"></canvas>
     <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center;">
       <span style="font-size:11px;color:var(--text-soft);">✏️ Draw to annotate</span>
       <button onclick="clearAnnotation()" style="padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);font-size:11px;cursor:pointer;">Clear</button>
@@ -497,6 +502,10 @@ window.renderCards = function() {
           ${subtasks.length ? `<span class="card-subtasks">📌 ${doneCount}/${subtasks.length} subtasks</span>` : ''}
         </div>
         ${tags ? `<div class="card-tag-list">${tags}</div>` : ''}
+        ${!done ? `<div class="card-quick-actions">
+          <button class="card-quick-btn cqb-today" onclick="event.stopPropagation();quickSetToday('${t.id}',this)">⚡ Today</button>
+          <button class="card-quick-btn cqb-done" onclick="event.stopPropagation();quickMarkDone('${t.id}',this)">✓ Done</button>
+        </div>` : ''}
       </div>
       <div class="card-right">
         <div class="card-status-dot ${statusDotClass}"></div>
@@ -526,6 +535,72 @@ window.filterCards = function(filter, el) {
 }
 
 // ── RESTORE SAVED FILTER (after task navigation) ──
+function saveFilterForNewTask() {
+  // If a specific tag is active, pass it to add-task
+  const tagFilters = [...WORK_TAGS, ...PERSONAL_TAGS];
+  if (tagFilters.includes(currentFilter)) {
+    localStorage.setItem('newTaskPresetTag', currentFilter);
+  } else {
+    localStorage.removeItem('newTaskPresetTag');
+  }
+}
+
+// ── QUICK CARD ACTIONS ──
+window.quickSetToday = async function(taskId, btn) {
+  const t = allTasks.find(t => t.id === taskId);
+  if (!t) return;
+  t.dueDate = todayStr();
+  btn.textContent = '✓ Set';
+  btn.style.background = 'var(--lav-pale)';
+  try {
+    await setDoc(doc(db,'tasks',taskId), t);
+    setTimeout(() => renderCards(), 600);
+  } catch(e) { btn.textContent = '⚡ Today'; }
+}
+
+window.quickMarkDone = async function(taskId, btn) {
+  const t = allTasks.find(t => t.id === taskId);
+  if (!t) return;
+  t.status = 'done';
+  t.doneAt = new Date().toISOString();
+  btn.textContent = '✓ Done!';
+  btn.style.background = 'var(--green-pale)';
+  try {
+    await setDoc(doc(db,'tasks',taskId), t);
+    updateHeaderStats();
+    setTimeout(() => renderCards(), 700);
+  } catch(e) { btn.textContent = '✓ Done'; }
+}
+
+// ── CLICKABLE ACTION BUBBLES ──
+function addChatBubbleActions(actions) {
+  const msgs = document.getElementById('chat-messages');
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'display:flex;flex-direction:column;gap:6px;align-self:flex-start;max-width:90%;';
+
+  actions.forEach(a => {
+    const div = document.createElement('div');
+    div.style.cssText = 'background:var(--green-pale);color:#2d5e48;padding:8px 12px;border-radius:10px;font-size:13px;display:flex;align-items:center;gap:8px;';
+
+    // Try to extract task ID and title from message for linking
+    // msg format: ✅ Created: "Title" or ✅ Updated: "Title"
+    const taskMatch = a.msg.match(/"([^"]+)"/);
+    const taskObj = taskMatch ? allTasks.find(t => t.title === taskMatch[1]) : null;
+
+    if (taskObj) {
+      div.innerHTML = `<span>${escHtml(a.msg)}</span>
+        <a href="task.html" onclick="localStorage.setItem('currentTaskId','${taskObj.id}');localStorage.setItem('savedFilter','${currentFilter}')"
+           style="font-size:11px;font-weight:700;color:var(--blue);text-decoration:none;white-space:nowrap;padding:2px 7px;border-radius:5px;background:rgba(74,127,181,.12);">→ Open</a>`;
+    } else {
+      div.textContent = a.msg;
+    }
+    wrap.appendChild(div);
+  });
+
+  msgs.appendChild(wrap);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
 function restoreSavedFilter() {
   const saved = localStorage.getItem('savedFilter');
   if (!saved || saved === 'all') return;
@@ -1046,7 +1121,7 @@ window.sendChatMessage = async function() {
     removeBubble(loadingId);
     if (cleanReply) addChatBubble('ai', cleanReply);
     if (actions.length) {
-      addChatBubble('ai-action', actions.map(a=>a.msg).join('\n'));
+      addChatBubbleActions(actions);
     }
   } catch(e) {
     removeBubble(loadingId);

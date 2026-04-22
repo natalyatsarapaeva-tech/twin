@@ -114,9 +114,9 @@
     .card-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;}
     .card-arrow{color:var(--blue-light);font-size:18px;}
     .card-status-dot{width:10px;height:10px;border-radius:50%;}
-    .card-quick-actions{display:flex;gap:4px;margin-top:6px;}
-    .card-quick-btn{padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600;border:none;cursor:pointer;font-family:'DM Sans',sans-serif;transition:opacity .15s;}
-    .card-quick-btn:active{opacity:.7;}
+    .card-quick-actions{display:flex;gap:4px;}
+    .card-quick-btn{width:28px;height:28px;border-radius:8px;font-size:13px;font-weight:700;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .15s,opacity .15s;padding:0;}
+    .card-quick-btn:active{transform:scale(.88);}
     .cqb-today{background:#fff3cd;color:#a0742a;}
     .cqb-done{background:var(--green-pale);color:#2d6e52;}
     .status-new{background:var(--blue-light);}
@@ -307,20 +307,28 @@
   <div class="chat-messages" id="chat-messages">
     <div class="chat-bubble ai">Hey! I can help with your tasks — create tasks, suggest subtasks, analyze priorities, or answer questions. Add your OpenAI API key in 'New Task' to get started.</div>
   </div>
-  <div id="chat-img-preview" style="display:none;padding:8px 16px 0;position:relative;max-height:280px;overflow-y:auto;">
-    <canvas id="chat-annotate-canvas" style="max-width:100%;max-height:200px;object-fit:contain;border-radius:10px;border:2px solid var(--lavender);cursor:crosshair;display:block;"></canvas>
-    <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center;">
-      <span style="font-size:11px;color:var(--text-soft);">✏️ Draw to annotate</span>
-      <button onclick="clearAnnotation()" style="padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);font-size:11px;cursor:pointer;">Clear</button>
-      <button onclick="removeImage()" style="padding:3px 8px;border-radius:6px;border:1px solid var(--red);color:var(--red);background:none;font-size:11px;cursor:pointer;">Remove</button>
-      <input type="range" id="pen-size" min="2" max="16" value="4" style="width:60px;" title="Pen size">
-      <input type="color" id="pen-color" value="#e05555" style="width:28px;height:24px;border:none;cursor:pointer;border-radius:4px;" title="Pen color">
+  <div id="chat-img-preview" style="display:none;padding:8px 16px 0;">
+    <!-- Thumbnail strip -->
+    <div id="chat-img-thumbs" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;scrollbar-width:thin;"></div>
+    <!-- Annotation canvas for selected image -->
+    <div id="chat-annotate-wrap" style="display:none;margin-top:8px;position:relative;">
+      <canvas id="chat-annotate-canvas" style="max-width:100%;max-height:180px;border-radius:10px;border:2px solid var(--lavender);cursor:crosshair;display:block;"></canvas>
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;align-items:center;">
+        <span style="font-size:11px;color:var(--text-soft);">✏️ Annotate</span>
+        <button onclick="clearAnnotation()" style="padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);font-size:11px;cursor:pointer;">Clear</button>
+        <button onclick="closeAnnotation()" style="padding:3px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);font-size:11px;cursor:pointer;">Done</button>
+        <input type="range" id="pen-size" min="2" max="16" value="4" style="width:60px;" title="Pen size">
+        <input type="color" id="pen-color" value="#e05555" style="width:28px;height:24px;border:none;cursor:pointer;border-radius:4px;">
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:4px;">
+      <button onclick="clearAllImages()" style="padding:3px 10px;border-radius:6px;border:1px solid var(--red);color:var(--red);background:none;font-size:11px;cursor:pointer;">✕ Clear all</button>
     </div>
   </div>
   <div class="chat-input-row">
     <label class="chat-img-btn" title="Upload image">
       📎
-      <input type="file" accept="image/*" style="display:none" onchange="handleChatImage(this)">
+      <input type="file" accept="image/*" multiple style="display:none" onchange="handleChatImages(this)">
     </label>
     <textarea class="chat-input" id="chat-input" rows="1" placeholder="Type a message or upload an image…" onkeydown="chatKeydown(event)"></textarea>
     <button class="chat-send" id="chat-send" onclick="sendChatMessage()">→</button>
@@ -500,15 +508,16 @@ window.renderCards = function() {
         <div class="card-meta-row">
           <span class="card-due ${dueClass}">${dueText}</span>
           ${subtasks.length ? `<span class="card-subtasks">📌 ${doneCount}/${subtasks.length} subtasks</span>` : ''}
+          ${t.recurring ? `<span style="font-size:11px;padding:2px 7px;border-radius:6px;background:var(--lav-pale);color:var(--lavender);font-weight:600;">♻ ${t.recurring.frequency}</span>` : ''}
         </div>
         ${tags ? `<div class="card-tag-list">${tags}</div>` : ''}
-        ${!done ? `<div class="card-quick-actions">
-          <button class="card-quick-btn cqb-today" onclick="event.stopPropagation();quickSetToday('${t.id}',this)">⚡ Today</button>
-          <button class="card-quick-btn cqb-done" onclick="event.stopPropagation();quickMarkDone('${t.id}',this)">✓ Done</button>
-        </div>` : ''}
       </div>
       <div class="card-right">
-        <div class="card-status-dot ${statusDotClass}"></div>
+        ${!done ? `<div class="card-quick-actions" style="flex-direction:column;align-items:flex-end;margin-bottom:4px;">
+          <button class="card-quick-btn cqb-today" onclick="event.stopPropagation();quickSetToday('${t.id}',this)" style="margin-bottom:4px;" title="Set due today">⚡</button>
+          <button class="card-quick-btn cqb-done" onclick="event.stopPropagation();quickMarkDone('${t.id}',this)" title="Mark done">✓</button>
+        </div>` : ''}
+        <div class="card-status-dot ${statusDotClass}" style="margin-top:4px;"></div>
         <span class="card-arrow">›</span>
       </div>`;
     card.onclick = () => {
@@ -561,15 +570,40 @@ window.quickSetToday = async function(taskId, btn) {
 window.quickMarkDone = async function(taskId, btn) {
   const t = allTasks.find(t => t.id === taskId);
   if (!t) return;
-  t.status = 'done';
-  t.doneAt = new Date().toISOString();
+
   btn.textContent = '✓ Done!';
   btn.style.background = 'var(--green-pale)';
+
   try {
-    await setDoc(doc(db,'tasks',taskId), t);
+    if (t.recurring) {
+      // Recurring template: create next instance, reset this one's status+date
+      const rec = t.recurring;
+      const nextDue = advanceDate(rec.nextDue || t.dueDate || todayStr(), rec.frequency, rec.interval || 1);
+      const newId = 'task-' + Date.now() + '-' + Math.random().toString(36).slice(2,5);
+      const newTask = {
+        ...t, id: newId, status: 'new',
+        dueDate: rec.nextDue || t.dueDate,
+        doneAt: null, notes: '',
+        subtasks: (t.subtasks||[]).map(s => ({...s, status:'new', doneAt:null})),
+        createdAt: new Date().toISOString(),
+        recurring: null
+      };
+      // Archive THIS occurrence
+      const archived = {...t, status:'done', doneAt: new Date().toISOString(),
+        recurring: {...rec, nextDue: nextDue}};
+      await setDoc(doc(db,'tasks',newId), newTask);
+      await setDoc(doc(db,'tasks',taskId), archived);
+      allTasks.push(newTask);
+      const idx = allTasks.findIndex(x => x.id === taskId);
+      if (idx >= 0) allTasks[idx] = archived;
+    } else {
+      t.status = 'done';
+      t.doneAt = new Date().toISOString();
+      await setDoc(doc(db,'tasks',taskId), t);
+    }
     updateHeaderStats();
-    setTimeout(() => renderCards(), 700);
-  } catch(e) { btn.textContent = '✓ Done'; }
+    setTimeout(() => renderCards(), 500);
+  } catch(e) { console.error(e); btn.textContent = '✓ Done'; }
 }
 
 // ── CLICKABLE ACTION BUBBLES ──
@@ -1072,24 +1106,44 @@ window.sendChatMessage = async function() {
   }
   const input = document.getElementById('chat-input');
   const text = input.value.trim();
-  const imgPayload = chatImageData ? getFinalImageBase64() : null;
-  if (!text && !imgPayload) return;
+  const hasImages = chatImages && chatImages.length > 0;
+  if (!text && !hasImages) return;
 
   input.value = '';
-  const userBubbleId = addChatBubble('user', text || '📎 [image]');
-  if (imgPayload) {
-    const thumb = document.createElement('img');
-    thumb.src = 'data:'+imgPayload.mediaType+';base64,'+imgPayload.base64;
-    thumb.style.cssText = 'max-width:180px;border-radius:8px;margin-top:6px;display:block;';
-    document.getElementById(userBubbleId)?.appendChild(thumb);
+  // Close annotation if open
+  if (typeof closeAnnotation === 'function') closeAnnotation();
+
+  const userBubbleId = addChatBubble('user', text || `📎 ${chatImages.length} image${chatImages.length>1?'s':''}`);
+  // Show thumbnails in bubble
+  if (hasImages) {
+    const bubble = document.getElementById(userBubbleId);
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;';
+    chatImages.forEach(img => {
+      const th = document.createElement('img');
+      th.src = img.annotatedDataUrl || img.dataUrl;
+      th.style.cssText = 'height:60px;width:60px;object-fit:cover;border-radius:6px;';
+      row.appendChild(th);
+    });
+    bubble?.appendChild(row);
   }
-  let userContent = imgPayload
-    ? [{type:'image_url',image_url:{url:'data:'+imgPayload.mediaType+';base64,'+imgPayload.base64,detail:'high'}},
-       {type:'text',text:text||'Extract any tasks, notes, or actions from this image.'}]
-    : text;
-  chatHistory.push({role:'user',content:userContent});
+
+  // Build message content
+  let userContent;
+  if (hasImages) {
+    userContent = [
+      ...chatImages.map(img => {
+        const finalSrc = img.annotatedDataUrl || img.dataUrl;
+        return {type:'image_url', image_url:{url:finalSrc, detail:'high'}};
+      }),
+      {type:'text', text: text || `Extract all tasks, notes, action items, or decisions from these ${chatImages.length} image(s).`}
+    ];
+  } else {
+    userContent = text;
+  }
+  chatHistory.push({role:'user', content:userContent});
   chatUserMessageCount++;
-  removeImage();
+  clearAllImages();
 
   const sendBtn = document.getElementById('chat-send');
   sendBtn.disabled = true;
@@ -1148,67 +1202,130 @@ function addChatBubble(role, text, isLoading=false) {
 
 function updateBubble(id,text){const el=document.getElementById(id);if(el)el.textContent=text;}
 
-// ── IMAGE UPLOAD + ANNOTATION FOR CHAT ──
-let chatImageData = null; // {base64, mediaType}
+// ── MULTI-IMAGE UPLOAD + ANNOTATION FOR CHAT ──
+let chatImages = []; // [{base64, mediaType, dataUrl, annotatedDataUrl}]
 let annotCanvas = null, annotCtx = null, annotDrawing = false;
+let annotatingIdx = -1; // which image is open in annotator
 
-window.handleChatImage = function(input) {
-  const file = input.files[0];
-  if (!file) return;
+window.handleChatImages = function(input) {
+  const files = [...(input.files||[])];
+  if (!files.length) return;
   input.value = '';
-  const reader = new FileReader();
-  reader.onload = e => {
-    const dataUrl = e.target.result;
-    chatImageData = { base64: dataUrl.split(',')[1], mediaType: file.type || 'image/jpeg', dataUrl };
-    showAnnotationCanvas(dataUrl);
-  };
-  reader.readAsDataURL(file);
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const dataUrl = e.target.result;
+      chatImages.push({
+        base64: dataUrl.split(',')[1],
+        mediaType: file.type || 'image/jpeg',
+        dataUrl,
+        annotatedDataUrl: null // set after annotation
+      });
+      renderImageThumbs();
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
-function showAnnotationCanvas(dataUrl) {
-  const wrap = document.getElementById('chat-img-preview');
+// Keep backward compat
+window.handleChatImage = window.handleChatImages;
+
+function renderImageThumbs() {
+  const preview = document.getElementById('chat-img-preview');
+  const thumbs = document.getElementById('chat-img-thumbs');
+  if (!chatImages.length) { preview.style.display='none'; return; }
+  preview.style.display = 'block';
+
+  thumbs.innerHTML = chatImages.map((img, i) => `
+    <div style="position:relative;flex-shrink:0;cursor:pointer;" onclick="openAnnotation(${i})">
+      <img src="${img.annotatedDataUrl || img.dataUrl}"
+        style="width:72px;height:72px;object-fit:cover;border-radius:9px;border:2px solid ${i===annotatingIdx?'var(--lavender)':'var(--border)'};display:block;"/>
+      <button onclick="event.stopPropagation();removeImageAt(${i})"
+        style="position:absolute;top:2px;right:2px;background:rgba(0,0,0,.55);color:#fff;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;">×</button>
+      ${img.annotatedDataUrl ? '<div style="position:absolute;bottom:3px;left:3px;background:var(--lavender);border-radius:4px;width:14px;height:14px;font-size:9px;color:white;display:flex;align-items:center;justify-content:center;">✏</div>' : ''}
+    </div>`).join('') +
+    `<label style="width:72px;height:72px;border:2px dashed var(--border);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--text-soft);cursor:pointer;flex-shrink:0;" title="Add more images">
+      +<input type="file" accept="image/*" multiple style="display:none" onchange="handleChatImages(this)">
+    </label>`;
+}
+
+window.openAnnotation = function(i) {
+  annotatingIdx = i;
+  const img = chatImages[i];
+  const wrap = document.getElementById('chat-annotate-wrap');
   wrap.style.display = 'block';
   const canvas = document.getElementById('chat-annotate-canvas');
   annotCanvas = canvas; annotCtx = canvas.getContext('2d');
-  const img = new Image();
-  img.onload = () => {
-    const maxW = wrap.clientWidth - 32;
-    const scale = Math.min(1, maxW / img.width);
-    canvas.width = img.width * scale;
-    canvas.height = img.height * scale;
-    annotCtx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  const im = new Image();
+  im.onload = () => {
+    const maxW = wrap.clientWidth - 8;
+    const scale = Math.min(1, maxW / im.width);
+    canvas.width = im.width * scale;
+    canvas.height = Math.min(im.height * scale, 180);
+    annotCtx.drawImage(im, 0, 0, canvas.width, canvas.height);
   };
-  img.src = dataUrl;
+  im.src = img.annotatedDataUrl || img.dataUrl;
+  renderImageThumbs(); // update border
 
-  // Draw events
-  canvas.onmousedown = e => { annotDrawing = true; annotCtx.beginPath(); annotCtx.moveTo(...getPos(e,canvas)); };
-  canvas.onmousemove = e => { if(!annotDrawing) return; annotCtx.lineTo(...getPos(e,canvas)); annotCtx.strokeStyle = document.getElementById('pen-color').value; annotCtx.lineWidth = document.getElementById('pen-size').value; annotCtx.lineCap = 'round'; annotCtx.lineJoin = 'round'; annotCtx.stroke(); };
-  canvas.onmouseup = canvas.onmouseleave = () => annotDrawing = false;
-  // Touch
-  canvas.ontouchstart = e => { e.preventDefault(); annotDrawing = true; annotCtx.beginPath(); annotCtx.moveTo(...getPos(e.touches[0],canvas)); };
-  canvas.ontouchmove = e => { e.preventDefault(); if(!annotDrawing) return; annotCtx.lineTo(...getPos(e.touches[0],canvas)); annotCtx.strokeStyle = document.getElementById('pen-color').value; annotCtx.lineWidth = document.getElementById('pen-size').value; annotCtx.lineCap = 'round'; annotCtx.stroke(); };
-  canvas.ontouchend = () => annotDrawing = false;
+  canvas.onmousedown = e => { annotDrawing=true; annotCtx.beginPath(); annotCtx.moveTo(...getPos(e,canvas)); };
+  canvas.onmousemove = e => { if(!annotDrawing)return; annotCtx.lineTo(...getPos(e,canvas)); annotCtx.strokeStyle=document.getElementById('pen-color').value; annotCtx.lineWidth=document.getElementById('pen-size').value; annotCtx.lineCap='round'; annotCtx.stroke(); };
+  canvas.onmouseup = canvas.onmouseleave = () => annotDrawing=false;
+  canvas.ontouchstart = e => { e.preventDefault(); annotDrawing=true; annotCtx.beginPath(); annotCtx.moveTo(...getPos(e.touches[0],canvas)); };
+  canvas.ontouchmove = e => { e.preventDefault(); if(!annotDrawing)return; annotCtx.lineTo(...getPos(e.touches[0],canvas)); annotCtx.strokeStyle=document.getElementById('pen-color').value; annotCtx.lineWidth=document.getElementById('pen-size').value; annotCtx.lineCap='round'; annotCtx.stroke(); };
+  canvas.ontouchend = () => annotDrawing=false;
 }
+
+window.closeAnnotation = function() {
+  // Save annotated version
+  if (annotatingIdx >= 0 && annotCanvas) {
+    chatImages[annotatingIdx].annotatedDataUrl = annotCanvas.toDataURL('image/jpeg', 0.88);
+  }
+  document.getElementById('chat-annotate-wrap').style.display = 'none';
+  annotatingIdx = -1;
+  renderImageThumbs();
+}
+
+window.clearAnnotation = function() {
+  if (annotatingIdx < 0 || !annotCanvas) return;
+  const img = chatImages[annotatingIdx];
+  const im = new Image();
+  im.onload = () => annotCtx.drawImage(im, 0, 0, annotCanvas.width, annotCanvas.height);
+  im.src = img.dataUrl; // reset to original
+  chatImages[annotatingIdx].annotatedDataUrl = null;
+}
+
+window.removeImageAt = function(i) {
+  chatImages.splice(i, 1);
+  if (annotatingIdx === i) {
+    document.getElementById('chat-annotate-wrap').style.display='none';
+    annotatingIdx = -1;
+  } else if (annotatingIdx > i) { annotatingIdx--; }
+  renderImageThumbs();
+  if (!chatImages.length) document.getElementById('chat-img-preview').style.display='none';
+}
+
+window.clearAllImages = function() {
+  chatImages = [];
+  annotatingIdx = -1;
+  annotCanvas = null;
+  document.getElementById('chat-img-preview').style.display = 'none';
+  document.getElementById('chat-annotate-wrap').style.display = 'none';
+}
+
+// Backward compat alias
+window.removeImage = window.clearAllImages;
 
 function getPos(e, canvas) {
   const r = canvas.getBoundingClientRect();
   return [e.clientX - r.left, e.clientY - r.top];
 }
 
-window.clearAnnotation = function() {
-  if (!annotCanvas || !chatImageData) return;
-  const img = new Image(); img.onload = () => annotCtx.drawImage(img, 0, 0, annotCanvas.width, annotCanvas.height); img.src = chatImageData.dataUrl;
-}
-
-window.removeImage = function() {
-  chatImageData = null; annotCanvas = null; annotCtx = null;
-  document.getElementById('chat-img-preview').style.display = 'none';
-}
-
 function getFinalImageBase64() {
-  if (!annotCanvas) return null;
-  const dataUrl = annotCanvas.toDataURL('image/jpeg', 0.85);
-  return { base64: dataUrl.split(',')[1], mediaType: 'image/jpeg' };
+  // Returns FIRST image only (for single-image compat) — main send uses chatImages array
+  if (!chatImages.length) return null;
+  const img = chatImages[0];
+  const src = img.annotatedDataUrl || img.dataUrl;
+  return { base64: src.split(',')[1], mediaType: 'image/jpeg' };
 }
 
 function removeBubble(id) {

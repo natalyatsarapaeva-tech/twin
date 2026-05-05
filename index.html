@@ -396,6 +396,11 @@ async function loadTasks() {
       const t = {id: d.id, ...d.data()};
       // Read-time migration: old tasks used dueDate, now we use deadline
       if (!t.deadline && t.dueDate) t.deadline = t.dueDate;
+      // Auto-derive nextAction from earliest pending subtask due date if not set
+      if (!t.nextAction) {
+        const pending = (t.subtasks||[]).filter(s => s.status !== 'done' && s.dueDate);
+        if (pending.length) t.nextAction = pending.map(s => s.dueDate).sort()[0];
+      }
       return t;
     });
     document.getElementById('loading').style.display = 'none';

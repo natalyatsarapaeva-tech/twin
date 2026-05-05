@@ -1142,7 +1142,11 @@ window.deleteTask = async function() {
 
 // ── SAVE ──
 async function save() {
+  // Always re-derive nextAction from earliest pending subtask due date
+  const derived = deriveNextAction(task);
+  if (derived) task.nextAction = derived;
   await updateDoc(doc(db, 'tasks', task.id), task);
+  render();
 }
 
 // Fire-and-forget tag summary update

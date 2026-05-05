@@ -380,6 +380,8 @@ async function load() {
   const snap = await getDoc(doc(db, 'tasks', id));
   if (!snap.exists()) { window.location.href = 'index.html'; return; }
   task = {id: snap.id, ...snap.data()};
+  // Read-time migration: old tasks used dueDate, now we use deadline
+  if (!task.deadline && task.dueDate) task.deadline = task.dueDate;
   task.subtasks = task.subtasks || [];
   task.tags = task.tags || [];
   render();

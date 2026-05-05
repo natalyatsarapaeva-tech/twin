@@ -58,6 +58,7 @@
     .stat-chip.overdue{background:rgba(192,90,90,.25);color:#f0b0b0;border-color:rgba(192,90,90,.3);}
     .stat-chip.clickable{cursor:pointer;transition:opacity .15s;}
     .stat-chip.clickable:hover{opacity:.8;}
+    .stat-chip.muted{opacity:.45;}
     .stat-chip.stat-active{outline:2px solid rgba(255,255,255,.5);outline-offset:1px;}
     .card-next-action{font-size:11px;font-weight:500;padding:2px 7px;border-radius:6px;background:var(--lav-pale);color:var(--lavender);}
 
@@ -391,7 +392,12 @@ const TAG_META = {
 async function loadTasks() {
   try {
     const snap = await getDocs(collection(db, 'tasks'));
-    allTasks = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    allTasks = snap.docs.map(d => {
+      const t = {id: d.id, ...d.data()};
+      // Read-time migration: old tasks used dueDate, now we use deadline
+      if (!t.deadline && t.dueDate) t.deadline = t.dueDate;
+      return t;
+    });
     document.getElementById('loading').style.display = 'none';
     document.getElementById('home').style.display = 'flex';
     updateHeaderStats();
@@ -410,16 +416,16 @@ loadWideContext();
 function updateHeaderStats() {
   const today = todayStr();
   const overdue = allTasks.filter(t => t.status !== 'done' && t.deadline && t.deadline < today).length;
-  const todayCount = allTasks.filter(t => t.status !== 'done' && t.nextAction === today).length;
+  const todayCount = allTasks.filter(t => t.status !== 'done' && (t.nextAction === today || (!t.nextAction && t.deadline === today))).length;
   const doneCount = allTasks.filter(t => t.status === 'done').length;
   const total = allTasks.filter(t => t.status !== 'done').length;
 
   document.getElementById('count-label').textContent = total + ' active tasks';
   const stats = document.getElementById('header-stats');
   stats.innerHTML = '';
-  if (overdue) stats.innerHTML += `<button class="stat-chip overdue clickable" data-filter="overdue" onclick="filterCards('overdue',null)">🔴 ${overdue} overdue</button>`;
-  if (todayCount) stats.innerHTML += `<button class="stat-chip clickable" data-filter="today" onclick="filterCards('today',null)">⚡ ${todayCount} today</button>`;
-  stats.innerHTML += `<button class="stat-chip clickable" data-filter="done" onclick="filterCards('done',null)">✅ ${doneCount} completed</button>`;
+  stats.innerHTML += `<button class="stat-chip overdue clickable${overdue?'':' muted'}" data-filter="overdue" onclick="filterCards('overdue',null)">🔴 ${overdue} overdue</button>`;
+  stats.innerHTML += `<button class="stat-chip clickable${todayCount?'':' muted'}" data-filter="today" onclick="filterCards('today',null)">⚡ ${todayCount} today</button>`;
+  stats.innerHTML += `<button class="stat-chip clickable" data-filter="done" onclick="filterCards('done',null)">✅ ${doneCount} done</button>`;
 }
 
 // ── FILTER ──
@@ -437,9 +443,9 @@ function getFiltered() {
       );
       break;
     case 'overdue':    list = list.filter(t => t.status !== 'done' && t.deadline && t.deadline < today); break;
-    case 'today':      list = list.filter(t => t.status !== 'done' && t.nextAction === today); break;
+    case 'today':      list = list.filter(t => t.status !== 'done' && (t.nextAction === today || (!t.nextAction && t.deadline === today))); break;
     case 'this-week': { const nw = new Date(); nw.setDate(nw.getDate()+7); const nwStr=nw.toISOString().split('T')[0];
-                        list = list.filter(t => t.status !== 'done' && t.nextAction && t.nextAction >= today && t.nextAction <= nwStr); break; }
+                        list = list.filter(t => { const d = t.nextAction || t.deadline; return t.status !== 'done' && d && d >= today && d <= nwStr; }); break; }
     case 'no-date':    list = list.filter(t => t.status !== 'done' && !t.deadline); break;
     case 'done-today': list = list.filter(t => t.status === 'done' && t.doneAt && t.doneAt.startsWith(today)); break;
     case 'done':       list = list.filter(t => t.status === 'done'); break;

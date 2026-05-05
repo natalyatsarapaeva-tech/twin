@@ -302,8 +302,10 @@
   <div class="modal-body">
     <label class="modal-label">Title</label>
     <input class="modal-input" id="edit-title"/>
-    <label class="modal-label">Due date</label>
+    <label class="modal-label">Deadline</label>
     <input class="modal-input" type="date" id="edit-due"/>
+    <label class="modal-label">Next action date</label>
+    <input class="modal-input" type="date" id="edit-next-action"/>
     <label class="modal-label">Priority</label>
     <select class="modal-select" id="edit-priority">
       <option value="none">No priority</option>
@@ -416,11 +418,14 @@ function render() {
   // Meta chips
   const today = todayStr();
   let chips = '';
-  if (task.dueDate) {
+  if (task.deadline) {
     let cls = 'chip-due';
-    if (task.dueDate < today) cls += ' overdue';
-    else if (task.dueDate === today) cls += ' today';
-    chips += `<span class="meta-chip ${cls}">📅 ${fmtDate(task.dueDate)}</span>`;
+    if (task.deadline < today) cls += ' overdue';
+    else if (task.deadline === today) cls += ' today';
+    chips += `<span class="meta-chip ${cls}">📅 ${fmtDate(task.deadline)}</span>`;
+  }
+  if (task.nextAction) {
+    chips += `<span class="meta-chip chip-due" style="background:rgba(139,159,212,.2);color:var(--blue-pale);">→ ${task.nextAction === today ? 'Today' : fmtDate(task.nextAction)}</span>`;
   }
   if (task.priority && task.priority !== 'none') {
     const pLabels = {high:'🔴 High',med:'🟡 Medium',low:'🟢 Low'};
@@ -655,7 +660,8 @@ window.toggleEditRepeatInterval = function() {
 
 window.openEditModal = function() {
   document.getElementById('edit-title').value = task.title || '';
-  document.getElementById('edit-due').value = task.dueDate || '';
+  document.getElementById('edit-due').value = task.deadline || '';
+  document.getElementById('edit-next-action').value = task.nextAction || deriveNextAction(task);
   document.getElementById('edit-priority').value = task.priority || 'none';
   // Populate repeat
   const rec = task.recurring || {};
@@ -691,7 +697,8 @@ window.closeEditModal = function() {
 
 window.saveEditModal = async function() {
   task.title = document.getElementById('edit-title').value.trim();
-  task.dueDate = document.getElementById('edit-due').value || null;
+  task.deadline = document.getElementById('edit-due').value || null;
+  task.nextAction = document.getElementById('edit-next-action').value || deriveNextAction(task) || null;
   task.priority = document.getElementById('edit-priority').value;
   // Save recurring
   const repFreq = document.getElementById('edit-repeat')?.value || '';
@@ -700,7 +707,7 @@ window.saveEditModal = async function() {
     task.recurring = {
       frequency: repFreq,
       interval: repInt,
-      nextDue: task.recurring?.nextDue || task.dueDate || null,
+      nextDue: task.recurring?.nextDue || task.deadline || null,
       endDate: null
     };
   } else {
@@ -740,7 +747,7 @@ async function loadSiblingTasks() {
 }
 
 function buildTaskDump(t, includeSubtasks=true) {
-  let s = `[${t.id}] ${t.title} | status: ${t.status||'new'} | due: ${t.dueDate||'none'} | tags: ${(t.tags||[]).join(',')||'none'}`;
+  let s = `[${t.id}] ${t.title} | status: ${t.status||'new'} | deadline: ${t.deadline||'none'} | next: ${t.nextAction||'none'} | tags: ${(t.tags||[]).join(',')||'none'}`;
   if (includeSubtasks && (t.subtasks||[]).length) {
     s += '\n  Subtasks:\n' + t.subtasks.map((sub,i) =>
       `    ${i}. [${sub.status||'new'}] ${sub.title}${sub.note?' — '+sub.note:''}${sub.dueDate?' | due:'+sub.dueDate:''}${sub.assigned?' | @'+sub.assigned:''}`
@@ -754,7 +761,7 @@ function buildSystemPromptTask(siblingTasks) {
   const mainDump = `=== CURRENT TASK ===
 ID: ${task.id}
 Название: ${task.title}
-Status: ${task.status||'new'} | Priority: ${task.priority||'none'} | Due: ${task.dueDate||'none'}
+Status: ${task.status||'new'} | Priority: ${task.priority||'none'} | Deadline: ${task.deadline||'none'} | Next action: ${task.nextAction||'none'}
 Теги: ${(task.tags||[]).join(', ')||'нет'}
 Notes: ${task.notes||'нет'}
 Subtasks (${task.subtasks.length}):
@@ -1174,6 +1181,11 @@ ${taskList}`}
 // ── HELPERS ──
 window.goBack = () => window.location.href = 'index.html';
 function todayStr() { return new Date().toISOString().split('T')[0]; }
+function deriveNextAction(task) {
+  const pending = (task.subtasks||[]).filter(s => s.status !== 'done' && s.dueDate);
+  if (!pending.length) return '';
+  return pending.map(s => s.dueDate).sort()[0];
+}
 function fmtDate(d) {
   if (!d) return '';
   const [y,m,day] = d.split('-');

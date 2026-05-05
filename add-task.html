@@ -130,8 +130,12 @@
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;">
       <div style="flex:1;min-width:140px;">
-        <label class="field-label">Due date</label>
+        <label class="field-label">Deadline</label>
         <input class="field-input" type="date" id="f-due"/>
+      </div>
+      <div style="flex:1;min-width:140px;">
+        <label class="field-label">Next action date</label>
+        <input class="field-input" type="date" id="f-next-action"/>
       </div>
       <div style="flex:1;min-width:140px;">
         <label class="field-label">Priority</label>
@@ -346,17 +350,19 @@ window.saveTask = async function() {
   const id = 'task-' + Date.now();
   const repeatFreq = document.getElementById('f-repeat').value;
   const repeatInterval = parseInt(document.getElementById('f-repeat-interval')?.value||'1');
-  const dueDate = document.getElementById('f-due').value || null;
+  const deadline = document.getElementById('f-due').value || null;
+  const nextAction = document.getElementById('f-next-action').value || null;
   const recurring = repeatFreq ? {
     frequency: repeatFreq,
     interval: repeatInterval,
-    nextDue: dueDate || null,
+    nextDue: deadline || null,
     endDate: null
   } : null;
   const task = {
     id, title,
     description: document.getElementById('f-desc').value.trim(),
-    dueDate,
+    deadline,
+    nextAction,
     priority: document.getElementById('f-priority').value,
     tags: [...selectedTags],
     primaryTag: document.getElementById('f-primary-tag')?.value || (selectedTags[0]||null),
@@ -400,7 +406,8 @@ For each task:
 {
   "title": "task title in English",
   "tags": ["tag1", "tag2"],
-  "dueDate": "YYYY-MM-DD или null",
+  "deadline": "YYYY-MM-DD или null",
+  "nextAction": "YYYY-MM-DD или null",
   "priority": "high|med|low|none",
   "status": "new"
 }
@@ -447,7 +454,7 @@ function renderBatchResults() {
           <div class="ai-checkbox${batchSelected[i]?' checked':''}" onclick="toggleBatchItem(${i})" id="cb-${i}">${batchSelected[i]?'✓':''}</div>
           <div>
             <div class="ai-task-name">${escHtml(t.title)}</div>
-            <div class="ai-task-tags">${tags}${t.dueDate?`<span class="ai-tag-chip" style="background:var(--surface2);color:var(--text-soft)">📅 ${t.dueDate}</span>`:''}</div>
+            <div class="ai-task-tags">${tags}${t.deadline?`<span class="ai-tag-chip" style="background:var(--surface2);color:var(--text-soft)">📅 ${t.deadline}</span>`:''}</div>
           </div>
         </div>
       </div>`;
@@ -482,7 +489,7 @@ window.saveBatch = async function() {
       const id = 'task-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
       await setDoc(doc(db, 'tasks', id), {
         id, title:t.title, description:'', tags:t.tags||[],
-        dueDate:t.dueDate||null, priority:t.priority||'none',
+        deadline:t.deadline||null, nextAction:t.nextAction||null, priority:t.priority||'none',
         status:'new', subtasks:[], notes:'', createdAt:new Date().toISOString()
       });
       await new Promise(r => setTimeout(r, 80));

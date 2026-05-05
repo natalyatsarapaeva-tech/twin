@@ -74,7 +74,8 @@ contexts/
   notes: "string",           // free-form notes, drafts appended here
   status: "new|in-progress|blocked|done",
   priority: "high|med|low|none",
-  dueDate: "YYYY-MM-DD|null",
+  deadline: "YYYY-MM-DD|null",    // hard external deadline, shows red when past
+  nextAction: "YYYY-MM-DD|null", // when to work on it next; auto-derived from earliest pending subtask due date
   doneAt: "ISO timestamp|null",   // set when status → done
   tags: ["dev", "clients"],       // array of tag IDs
   primaryTag: "dev|null",         // used for mind map (no duplicates)
@@ -285,7 +286,7 @@ Shared utility — included via `<script src="voice.js">` in all HTML files.
 
 - `deadline` field (hard external deadline, shows red when overdue)
 - `nextAction` field (when to work on it next, auto-derived from subtask due dates)
-- Filters use `nextAction` for "today"/"this week", `deadline` for "overdue"
+- Filters use `nextAction` for "today"/"this week", `deadline` for "overdue" ✅
 - Google Calendar integration (create events from tasks)
 - PWA manifest + service worker for push notifications and home screen icon
 - Tag list editing (tags.html or section in context.html)

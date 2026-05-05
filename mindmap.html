@@ -279,12 +279,12 @@ function makeTaskNode(task, today) {
   node.className = `task-node ${urgentClass}`;
 
   let dueHtml = '';
-  if (task.dueDate) {
+  if (task.deadline) {
     let cls = 'due-normal';
-    if (task.dueDate < today) cls = 'due-overdue';
-    else if (task.dueDate === today) cls = 'due-today';
-    else if (daysDiff(today, task.dueDate) <= 3) cls = 'due-soon';
-    dueHtml = `<span class="task-node-due ${cls}">${fmtDate(task.dueDate)}</span>`;
+    if (task.deadline < today) cls = 'due-overdue';
+    else if (task.deadline === today) cls = 'due-today';
+    else if (daysDiff(today, task.deadline) <= 3) cls = 'due-soon';
+    dueHtml = `<span class="task-node-due ${cls}">${fmtDate(task.deadline)}</span>`;
   }
 
   const doneCount = (task.subtasks||[]).filter(s=>s.status==='done').length;
@@ -359,7 +359,7 @@ function showTaskDetail(task) {
   let html = `<div class="detail-type">Task</div>
     <div class="detail-title">${escHtml(task.title)}</div>
     <span class="detail-chip" style="background:${col}22;color:${col}">${statusLabels[task.status]||'Новое'}</span>
-    ${task.dueDate ? `<span class="detail-chip" style="background:var(--lav-pale);color:var(--lavender)">📅 ${fmtDate(task.dueDate)}</span>` : ''}
+    ${task.deadline ? `<span class="detail-chip" style="background:var(--lav-pale);color:var(--lavender)">📅 ${fmtDate(task.deadline)}</span>` : ''}
     ${task.notes ? `<div style="font-size:13px;color:var(--text-soft);margin-top:10px;line-height:1.5">${escHtml(task.notes)}</div>` : ''}`;
 
   if (subtasks.length) {

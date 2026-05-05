@@ -56,6 +56,10 @@
     .header-stats{display:flex;gap:16px;margin-top:16px;position:relative;z-index:1;}
     .stat-chip{background:rgba(255,255,255,.12);border-radius:20px;padding:5px 12px;font-size:12px;color:var(--blue-pale);font-weight:500;border:1px solid rgba(255,255,255,.15);}
     .stat-chip.overdue{background:rgba(192,90,90,.25);color:#f0b0b0;border-color:rgba(192,90,90,.3);}
+    .stat-chip.clickable{cursor:pointer;transition:opacity .15s;}
+    .stat-chip.clickable:hover{opacity:.8;}
+    .stat-chip.stat-active{outline:2px solid rgba(255,255,255,.5);outline-offset:1px;}
+    .card-next-action{font-size:11px;font-weight:500;padding:2px 7px;border-radius:6px;background:var(--lav-pale);color:var(--lavender);}
 
     .header-owl-row{display:flex;align-items:center;gap:16px;position:relative;z-index:1;}
     .header-owl{width:72px;height:72px;flex-shrink:0;filter:drop-shadow(0 4px 12px rgba(0,0,0,.2));}
@@ -231,8 +235,7 @@
       <div class="filter-tabs" id="filter-tabs-top">
         <button class="tab active all" onclick="filterCards('all',this)">🏠 Active</button>
         <button class="tab" onclick="filterCards('no-date',this)">📅 No date</button>
-        <button class="tab" onclick="filterCards('overdue',this)">🔴 Overdue</button>
-        <button class="tab" onclick="filterCards('today',this)">⚡ Today</button>
+        <button class="tab" onclick="filterCards('this-week',this)">📅 This week</button>
         <button class="tab" onclick="filterCards('done-today',this)">✅ Done today</button>
         <button class="tab" onclick="filterCards('done',this)">📂 All completed</button>
       </div>
@@ -406,16 +409,17 @@ loadWideContext();
 // ── HEADER STATS ──
 function updateHeaderStats() {
   const today = todayStr();
-  const overdue = allTasks.filter(t => t.status !== 'done' && t.dueDate && t.dueDate < today).length;
-  const todayCount = allTasks.filter(t => t.status !== 'done' && t.dueDate === today).length;
+  const overdue = allTasks.filter(t => t.status !== 'done' && t.deadline && t.deadline < today).length;
+  const todayCount = allTasks.filter(t => t.status !== 'done' && t.nextAction === today).length;
+  const doneCount = allTasks.filter(t => t.status === 'done').length;
   const total = allTasks.filter(t => t.status !== 'done').length;
 
   document.getElementById('count-label').textContent = total + ' active tasks';
   const stats = document.getElementById('header-stats');
   stats.innerHTML = '';
-  if (overdue) stats.innerHTML += `<div class="stat-chip overdue">🔴 ${overdue} overdue</div>`;
-  if (todayCount) stats.innerHTML += `<div class="stat-chip">⚡ ${todayCount} today</div>`;
-  stats.innerHTML += `<div class="stat-chip">${allTasks.filter(t=>t.status==='done').length} completed</div>`;
+  if (overdue) stats.innerHTML += `<button class="stat-chip overdue clickable" data-filter="overdue" onclick="filterCards('overdue',null)">🔴 ${overdue} overdue</button>`;
+  if (todayCount) stats.innerHTML += `<button class="stat-chip clickable" data-filter="today" onclick="filterCards('today',null)">⚡ ${todayCount} today</button>`;
+  stats.innerHTML += `<button class="stat-chip clickable" data-filter="done" onclick="filterCards('done',null)">✅ ${doneCount} completed</button>`;
 }
 
 // ── FILTER ──
@@ -429,14 +433,15 @@ function getFiltered() {
       list = list.filter(t =>
         t.status !== 'done' ||
         (t.doneAt && t.doneAt.startsWith(today)) ||
-        (t.status === 'done' && t.dueDate === today)
+        (t.status === 'done' && t.deadline === today)
       );
       break;
-    case 'overdue':    list = list.filter(t => t.status !== 'done' && t.dueDate && t.dueDate < today); break;
-    case 'today':      list = list.filter(t => t.status !== 'done' && t.dueDate === today); break;
-    case 'no-date':    list = list.filter(t => t.status !== 'done' && !t.dueDate); break;
-    case 'done-today': list = list.filter(t => t.status === 'done' &&
-                          ((t.doneAt && t.doneAt.startsWith(today)) || t.dueDate === today)); break;
+    case 'overdue':    list = list.filter(t => t.status !== 'done' && t.deadline && t.deadline < today); break;
+    case 'today':      list = list.filter(t => t.status !== 'done' && t.nextAction === today); break;
+    case 'this-week': { const nw = new Date(); nw.setDate(nw.getDate()+7); const nwStr=nw.toISOString().split('T')[0];
+                        list = list.filter(t => t.status !== 'done' && t.nextAction && t.nextAction >= today && t.nextAction <= nwStr); break; }
+    case 'no-date':    list = list.filter(t => t.status !== 'done' && !t.deadline); break;
+    case 'done-today': list = list.filter(t => t.status === 'done' && t.doneAt && t.doneAt.startsWith(today)); break;
     case 'done':       list = list.filter(t => t.status === 'done'); break;
     case 'work':       list = list.filter(t => t.status !== 'done' && (t.tags||[]).some(tag => WORK_TAGS.includes(tag))); break;
     case 'personal':   list = list.filter(t => t.status !== 'done' && (t.tags||[]).some(tag => PERSONAL_TAGS.includes(tag))); break;
@@ -457,8 +462,8 @@ function getFiltered() {
 
   // Sort
   list.sort((a,b) => {
-    const da = a.dueDate || '9999-99-99';
-    const db2 = b.dueDate || '9999-99-99';
+    const da = a.nextAction || a.deadline || '9999-99-99';
+    const db2 = b.nextAction || b.deadline || '9999-99-99';
     return sortAsc ? da.localeCompare(db2) : db2.localeCompare(da);
   });
 
@@ -483,13 +488,16 @@ window.renderCards = function() {
     const doneCount = subtasks.filter(s => s.status === 'done').length;
     const priority = t.priority || 'none';
 
-    let dueClass = 'no-date', dueText = 'No date';
-    if (t.dueDate) {
-      if (t.dueDate < today) { dueClass='overdue'; dueText='⚠ ' + fmtDate(t.dueDate); }
-      else if (t.dueDate === today) { dueClass='today'; dueText='⚡ Today'; }
-      else if (daysDiff(today, t.dueDate) <= 3) { dueClass='soon'; dueText='📅 ' + fmtDate(t.dueDate); }
-      else { dueClass='normal'; dueText='📅 ' + fmtDate(t.dueDate); }
+    let dueClass = 'no-date', dueText = 'No deadline';
+    if (t.deadline) {
+      if (t.deadline < today) { dueClass='overdue'; dueText='⚠ ' + fmtDate(t.deadline); }
+      else if (t.deadline === today) { dueClass='today'; dueText='🔴 Today'; }
+      else if (daysDiff(today, t.deadline) <= 3) { dueClass='soon'; dueText='📅 ' + fmtDate(t.deadline); }
+      else { dueClass='normal'; dueText='📅 ' + fmtDate(t.deadline); }
     }
+    const nextActionHtml = t.nextAction
+      ? `<span class="card-next-action">→ ${t.nextAction === today ? 'Today' : fmtDate(t.nextAction)}</span>`
+      : '';
 
     const tags = (t.tags||[]).map(tag => {
       const m = TAG_META[tag];
@@ -509,6 +517,7 @@ window.renderCards = function() {
         <div class="card-title${done?' done-text':''}">${escHtml(t.title)}</div>
         <div class="card-meta-row">
           <span class="card-due ${dueClass}">${dueText}</span>
+          ${nextActionHtml}
           ${subtasks.length ? `<span class="card-subtasks">📌 ${doneCount}/${subtasks.length} subtasks</span>` : ''}
           ${t.recurring ? `<span style="font-size:11px;padding:2px 7px;border-radius:6px;background:var(--lav-pale);color:var(--lavender);font-weight:600;">♻ ${t.recurring.frequency}</span>` : ''}
         </div>
@@ -537,11 +546,17 @@ window.renderCards = function() {
 window.filterCards = function(filter, el) {
   currentFilter = filter;
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active','all','work','personal'));
-  el.classList.add('active');
-  if (filter === 'all') el.classList.add('all');
-  else if (WORK_TAGS.includes(filter) || filter === 'work') el.classList.add('work');
-  else if (PERSONAL_TAGS.includes(filter) || filter === 'personal') el.classList.add('personal');
-  else el.classList.add('all');
+  document.querySelectorAll('.stat-chip[data-filter]').forEach(c => c.classList.remove('stat-active'));
+  if (el) {
+    el.classList.add('active');
+    if (filter === 'all') el.classList.add('all');
+    else if (WORK_TAGS.includes(filter) || filter === 'work') el.classList.add('work');
+    else if (PERSONAL_TAGS.includes(filter) || filter === 'personal') el.classList.add('personal');
+    else el.classList.add('all');
+  } else {
+    const chip = document.querySelector(`.stat-chip[data-filter="${filter}"]`);
+    if (chip) chip.classList.add('stat-active');
+  }
   renderCards();
 }
 
@@ -560,7 +575,7 @@ function saveFilterForNewTask() {
 window.quickSetToday = async function(taskId, btn) {
   const t = allTasks.find(t => t.id === taskId);
   if (!t) return;
-  t.dueDate = todayStr();
+  t.deadline = todayStr();
   btn.textContent = '✓ Set';
   btn.style.background = 'var(--lav-pale)';
   try {
@@ -580,11 +595,11 @@ window.quickMarkDone = async function(taskId, btn) {
     if (t.recurring) {
       // Recurring template: create next instance, reset this one's status+date
       const rec = t.recurring;
-      const nextDue = advanceDate(rec.nextDue || t.dueDate || todayStr(), rec.frequency, rec.interval || 1);
+      const nextDue = advanceDate(rec.nextDue || t.deadline || todayStr(), rec.frequency, rec.interval || 1);
       const newId = 'task-' + Date.now() + '-' + Math.random().toString(36).slice(2,5);
       const newTask = {
         ...t, id: newId, status: 'new',
-        dueDate: rec.nextDue || t.dueDate,
+        deadline: rec.nextDue || t.deadline,
         doneAt: null, notes: '',
         subtasks: (t.subtasks||[]).map(s => ({...s, status:'new', doneAt:null})),
         createdAt: new Date().toISOString(),
@@ -658,7 +673,7 @@ function restoreSavedFilter() {
 
 window.toggleSort = function() {
   sortAsc = !sortAsc;
-  document.getElementById('sort-label').textContent = sortAsc ? 'By due date ↑' : 'By due date ↓';
+  document.getElementById('sort-label').textContent = sortAsc ? 'By next action ↑' : 'By next action ↓';
   renderCards();
 }
 
@@ -783,17 +798,17 @@ ${ctx.chatSummary ? 'Recent chats: ' + ctx.chatSummary.slice(-400) : ''}`);
         const priority = t.priority || 'none';
         // Low priority and done → compact format
         if (priority === 'low' || t.status === 'done') {
-          return `[${t.id}] ${t.title} | ${t.status} | due:${t.dueDate||'–'}`;
+          return `[${t.id}] ${t.title} | ${t.status} | deadline:${t.deadline||'–'} | next:${t.nextAction||'–'}`;
         }
         // High/med → full dump
         const subs = (t.subtasks||[]).map((s,i) =>
           `    ${i}. [${s.status||'new'}] ${s.title}${s.note?' | '+s.note:''}${s.dueDate?' | due:'+s.dueDate:''}${s.assigned?' | @'+s.assigned:''}`
         ).join('\n');
-        const overdueMark = (t.dueDate && t.dueDate < today) ? ' ⚠️OVERDUE' : '';
+        const overdueMark = (t.deadline && t.deadline < today) ? ' ⚠️OVERDUE' : '';
         return `---
 ID: ${t.id}
 Title: ${t.title}${overdueMark}
-Status: ${t.status||'new'} | Priority: ${priority} | Due: ${t.dueDate||'none'}
+Status: ${t.status||'new'} | Priority: ${priority} | Deadline: ${t.deadline||'none'} | Next action: ${t.nextAction||'none'}
 Tags: ${(t.tags||[]).join(', ')||'none'}
 Notes: ${t.notes||'none'}
 Subtasks (${(t.subtasks||[]).length}):
@@ -808,7 +823,7 @@ ${subs||'    none'}`;
     .filter(t => t.status !== 'done' && t.priority === 'high' &&
       !(t.tags||[]).some(tag => relevantTags.includes(tag)))
     .slice(0, 10)
-    .map(t => `[${t.id}] ${t.title} | due:${t.dueDate||'–'} | tags:${(t.tags||[]).join(',')}`)
+    .map(t => `[${t.id}] ${t.title} | deadline:${t.deadline||'–'} | next:${t.nextAction||'–'} | tags:${(t.tags||[]).join(',')}`)
     .join('\n');
   const sectionD = bgTasks ? `\n═══ [D] OTHER HIGH PRIORITY TASKS ═══\n${bgTasks}` : '';
 
@@ -821,10 +836,10 @@ ${sectionA}${sectionB}${sectionC}${sectionD}
 Return JSON blocks at the end of your response when taking action.
 
 1. CREATE TASK:
-{"action":"create_task","task":{"title":"...","description":"...","tags":["tag"],"dueDate":"YYYY-MM-DD or null","priority":"high|med|low|none","status":"new","subtasks":[]}}
+{"action":"create_task","task":{"title":"...","description":"...","tags":["tag"],"deadline":"YYYY-MM-DD or null","nextAction":"YYYY-MM-DD or null","priority":"high|med|low|none","status":"new","subtasks":[]}}
 
 2. UPDATE TASK (changed fields only):
-{"action":"update_task","taskId":"ID_from_context","fields":{"title":"...","dueDate":"...","priority":"...","status":"...","notes":"..."}}
+{"action":"update_task","taskId":"ID_from_context","fields":{"title":"...","deadline":"...","nextAction":"...","priority":"...","status":"...","notes":"..."}}
 
 3. DELETE TASK:
 {"action":"delete_task","taskId":"ID_from_context","confirm":true}
@@ -1028,7 +1043,8 @@ async function executeAction(action) {
         title: action.task.title||'Untitled',
         description: action.task.description||'',
         tags: action.task.tags||[],
-        dueDate: action.task.dueDate||null,
+        deadline: action.task.deadline||null,
+        nextAction: action.task.nextAction||null,
         priority: action.task.priority||'none',
         status: 'new',
         subtasks: (action.task.subtasks||[]).map(s=>({
@@ -1347,7 +1363,7 @@ async function checkRecurringTasks() {
       ...template,
       id: newId,
       status: 'new',
-      dueDate: template.recurring.nextDue,
+      deadline: template.recurring.nextDue,
       doneAt: null,
       notes: '',
       subtasks: (template.subtasks||[]).map(s => ({...s, status:'new', doneAt:null})),
@@ -1492,7 +1508,7 @@ window.acceptMonthlySuggestions = async function() {
   for (const s of toAdd) {
     const id = 'task-'+Date.now()+'-'+Math.random().toString(36).slice(2,5);
     const task = {id, title:s.title, description:'', tags:s.tags||[],
-      dueDate:null, priority:s.priority||'med', status:'new',
+      deadline:null, nextAction:null, priority:s.priority||'med', status:'new',
       subtasks:[], notes:'', createdAt:new Date().toISOString()};
     await setDoc(doc(db,'tasks',id), task);
     allTasks.push(task);

@@ -130,7 +130,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+import { getFirestore, collection, getDocs, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD1uWPrp12lvpyBzXCOq9IrMuTU4uOTRao",
@@ -143,18 +143,40 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-const WORK_TAGS = ['dev','strategy','analytics','clients','leads','ux'];
-const PERSONAL_TAGS = ['kids','health','urgent','ideas','money','home','travel','rest','swedish'];
-const TAG_META = {
-  dev:{label:'💻 Dev',group:'work'},strategy:{label:'🎯 Strategy',group:'work'},
-  analytics:{label:'📊 Analytics',group:'work'},clients:{label:'🤝 Clients',group:'work'},
-  leads:{label:'📣 Leads',group:'work'},ux:{label:'🎨 UX',group:'work'},
-  kids:{label:'👶 Kids',group:'personal'},health:{label:'💚 Health',group:'personal'},
-  urgent:{label:'🚨 Urgent',group:'personal'},ideas:{label:'💡 Ideas',group:'personal'},
-  money:{label:'💰 Money',group:'personal'},home:{label:'🏠 Home',group:'personal'},
-  travel:{label:'✈️ Travel',group:'personal'},rest:{label:'🌊 Rest',group:'personal'},
-  swedish:{label:'🇸🇪 Swedish',group:'personal'},
+// ── TAGS ──
+const DEFAULT_TAGS = {
+  work: [
+    {id:'dev',label:'Dev',emoji:'💻'},{id:'strategy',label:'Strategy',emoji:'🎯'},
+    {id:'analytics',label:'Analytics',emoji:'📊'},{id:'clients',label:'Clients',emoji:'🤝'},
+    {id:'leads',label:'Leads',emoji:'📣'},{id:'ux',label:'UX',emoji:'🎨'},
+  ],
+  personal: [
+    {id:'kids',label:'Kids',emoji:'👶'},{id:'health',label:'Health',emoji:'💚'},
+    {id:'urgent',label:'Urgent',emoji:'🚨'},{id:'ideas',label:'Ideas',emoji:'💡'},
+    {id:'money',label:'Money',emoji:'💰'},{id:'home',label:'Home',emoji:'🏠'},
+    {id:'travel',label:'Travel',emoji:'✈️'},{id:'rest',label:'Rest',emoji:'🌊'},
+    {id:'swedish',label:'Swedish',emoji:'🇸🇪'},
+  ]
 };
+let TAGS_CONFIG = DEFAULT_TAGS;
+let WORK_TAGS = DEFAULT_TAGS.work.map(t=>t.id);
+let PERSONAL_TAGS = DEFAULT_TAGS.personal.map(t=>t.id);
+let TAG_META = {};
+function buildTagMeta() {
+  WORK_TAGS = TAGS_CONFIG.work.map(t=>t.id);
+  PERSONAL_TAGS = TAGS_CONFIG.personal.map(t=>t.id);
+  TAG_META = {};
+  TAGS_CONFIG.work.forEach(t=>{ TAG_META[t.id]={label:`${t.emoji} ${t.label}`,emoji:t.emoji,group:'work'}; });
+  TAGS_CONFIG.personal.forEach(t=>{ TAG_META[t.id]={label:`${t.emoji} ${t.label}`,emoji:t.emoji,group:'personal'}; });
+}
+async function loadTags() {
+  try {
+    const snap = await getDoc(doc(db,'meta','tags'));
+    if (snap.exists()) { TAGS_CONFIG = snap.data(); }
+    else { await setDoc(doc(db,'meta','tags'), DEFAULT_TAGS); }
+  } catch(e) { console.warn('loadTags failed, using defaults'); }
+  buildTagMeta();
+}
 
 let allTasks = [];
 
@@ -166,7 +188,8 @@ async function load() {
   document.getElementById('app').style.display = 'flex';
   renderMap();
 }
-load().catch(e => {
+async function init() { await loadTags(); load(); }
+init().catch(e => {
   document.getElementById('loading').innerHTML = `<div style='color:var(--blue-pale);padding:24px;text-align:center'>Error: ${e.message}</div>`;
 });
 

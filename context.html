@@ -61,6 +61,25 @@
     .tag-summary-updating{position:absolute;top:8px;right:8px;font-size:11px;color:var(--lavender);background:var(--lav-pale);padding:2px 8px;border-radius:6px;display:none;}
     .tag-summary-updating.show{display:block;}
 
+    /* TAG EDITOR */
+    .tag-edit-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);}
+    .tag-edit-row:last-child{border-bottom:none;}
+    .tag-edit-emoji{font-size:18px;width:28px;text-align:center;}
+    .tag-edit-name{font-size:14px;color:var(--text);flex:1;}
+    .tag-action-btn{padding:4px 10px;border-radius:7px;border:1px solid var(--border);background:none;cursor:pointer;font-size:12px;color:var(--text-soft);font-family:'DM Sans',sans-serif;}
+    .tag-action-btn:hover{background:var(--surface2);}
+    .tag-del-btn{padding:4px 10px;border-radius:7px;border:1px solid var(--border);background:none;cursor:pointer;font-size:12px;color:var(--text-soft);font-family:'DM Sans',sans-serif;}
+    .tag-del-btn:hover{border-color:var(--red);color:var(--red);}
+    .add-tag-btn{margin-top:10px;padding:8px 14px;border-radius:9px;border:2px dashed var(--border);background:none;cursor:pointer;font-size:13px;color:var(--text-soft);width:100%;font-family:'DM Sans',sans-serif;text-align:left;}
+    .add-tag-btn:hover{border-color:var(--lavender);color:var(--lavender);}
+    .tag-inline-form{display:flex;align-items:center;gap:6px;padding:8px 0;border-bottom:1px solid var(--border);}
+    .tag-inline-input{padding:6px 10px;border-radius:8px;border:2px solid var(--lavender);background:var(--white);font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text);outline:none;}
+    .tag-emoji-input{width:54px;text-align:center;font-size:16px;}
+    .tag-label-input{flex:1;}
+    .tag-form-btn{padding:6px 12px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;}
+    .tag-form-save{background:var(--slate);color:var(--white);}
+    .tag-form-cancel{background:var(--border);color:var(--text-soft);}
+
     /* LOADING */
     #page-loading{position:fixed;inset:0;background:var(--slate);display:flex;align-items:center;justify-content:center;z-index:999;}
     .loading-icon{font-size:48px;animation:pulse 1.4s ease infinite;}
@@ -109,6 +128,17 @@
       </div>
     </div>
 
+    <!-- TAG EDITOR -->
+    <div class="section">
+      <div class="section-title">
+        <span>Tags</span>
+        <button class="save-btn" style="font-size:11px;padding:5px 12px;margin-top:0" onclick="saveTags()">Save tags</button>
+      </div>
+      <div class="section-desc">Add, rename, or remove tags. Hit "Save tags" after making changes — all pages will use the updated list.</div>
+      <div id="tag-editor-content"></div>
+      <span class="saved-badge" id="tags-saved">✓ Tags saved</span>
+    </div>
+
     <!-- PER-TAG CONTEXTS -->
     <div class="tags-header">Tag contexts</div>
     <div id="tags-list"></div>
@@ -133,23 +163,35 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-const ALL_TAGS = [
-  {id:'dev',       label:'💻 Dev',       group:'work'},
-  {id:'strategy',  label:'🎯 Strategy',  group:'work'},
-  {id:'analytics', label:'📊 Analytics', group:'work'},
-  {id:'clients',   label:'🤝 Clients',   group:'work'},
-  {id:'leads',     label:'📣 Leads',     group:'work'},
-  {id:'ux',        label:'🎨 UX',        group:'work'},
-  {id:'kids',      label:'👶 Kids',      group:'personal'},
-  {id:'health',    label:'💚 Health',    group:'personal'},
-  {id:'urgent',    label:'🚨 Urgent',    group:'personal'},
-  {id:'ideas',     label:'💡 Ideas',     group:'personal'},
-  {id:'money',     label:'💰 Money',     group:'personal'},
-  {id:'home',      label:'🏠 Home',      group:'personal'},
-  {id:'travel',    label:'✈️ Travel',    group:'personal'},
-  {id:'rest',      label:'🌊 Rest',      group:'personal'},
-  {id:'swedish',   label:'🇸🇪 Swedish', group:'personal'},
-];
+const DEFAULT_TAGS = {
+  work: [
+    {id:'dev',label:'Dev',emoji:'💻'},{id:'strategy',label:'Strategy',emoji:'🎯'},
+    {id:'analytics',label:'Analytics',emoji:'📊'},{id:'clients',label:'Clients',emoji:'🤝'},
+    {id:'leads',label:'Leads',emoji:'📣'},{id:'ux',label:'UX',emoji:'🎨'},
+  ],
+  personal: [
+    {id:'kids',label:'Kids',emoji:'👶'},{id:'health',label:'Health',emoji:'💚'},
+    {id:'urgent',label:'Urgent',emoji:'🚨'},{id:'ideas',label:'Ideas',emoji:'💡'},
+    {id:'money',label:'Money',emoji:'💰'},{id:'home',label:'Home',emoji:'🏠'},
+    {id:'travel',label:'Travel',emoji:'✈️'},{id:'rest',label:'Rest',emoji:'🌊'},
+    {id:'swedish',label:'Swedish',emoji:'🇸🇪'},
+  ]
+};
+let TAGS_CONFIG = DEFAULT_TAGS;
+let TAG_META = {};
+function buildTagMeta() {
+  TAG_META = {};
+  TAGS_CONFIG.work.forEach(t=>{ TAG_META[t.id]={label:`${t.emoji} ${t.label}`,emoji:t.emoji,group:'work'}; });
+  TAGS_CONFIG.personal.forEach(t=>{ TAG_META[t.id]={label:`${t.emoji} ${t.label}`,emoji:t.emoji,group:'personal'}; });
+}
+async function loadTags() {
+  try {
+    const snap = await getDoc(doc(db,'meta','tags'));
+    if (snap.exists()) { TAGS_CONFIG = snap.data(); }
+    else { await setDoc(doc(db,'meta','tags'), DEFAULT_TAGS); }
+  } catch(e) { console.warn('loadTags failed, using defaults'); }
+  buildTagMeta();
+}
 
 // ── STATE ──
 let contexts = {}; // tagId → {profile, taskSummary, chatSummary}
@@ -175,7 +217,7 @@ async function load() {
   } catch(e) {}
 
   // Load all tag contexts
-  for (const tag of ALL_TAGS) {
+  for (const tag of [...TAGS_CONFIG.work, ...TAGS_CONFIG.personal]) {
     try {
       const snap = await getDoc(doc(db, 'contexts', 'tag-' + tag.id));
       contexts[tag.id] = snap.exists() ? snap.data() : {};
@@ -186,15 +228,21 @@ async function load() {
   document.getElementById('page-loading').style.display = 'none';
   document.getElementById('page-content').style.display = 'block';
 }
-load();
+
+async function init() {
+  await loadTags();
+  await load();
+  renderTagEditor();
+}
+init();
 
 // ── RENDER TAG LIST ──
 function renderTagList() {
   const container = document.getElementById('tags-list');
 
   // Group by work/personal
-  const work = ALL_TAGS.filter(t => t.group === 'work');
-  const personal = ALL_TAGS.filter(t => t.group === 'personal');
+  const work = TAGS_CONFIG.work.map(t=>({...t,group:'work'}));
+  const personal = TAGS_CONFIG.personal.map(t=>({...t,group:'personal'}));
 
   let html = '';
   const renderGroup = (tags, groupLabel) => {
@@ -206,7 +254,7 @@ function renderTagList() {
       html += `
       <div class="tag-card">
         <div class="tag-card-header" onclick="toggleTag('${tag.id}')">
-          <span class="tag-label">${tag.label} <span style="font-size:12px;color:var(--text-soft);font-weight:400">${taskCount} tasks${hasContext ? ' · ✓ context' : ''}</span></span>
+          <span class="tag-label">${tag.emoji} ${tag.label} <span style="font-size:12px;color:var(--text-soft);font-weight:400">${taskCount} tasks${hasContext ? ' · ✓ context' : ''}</span></span>
           <span class="tag-chevron" id="chevron-${tag.id}">›</span>
         </div>
         <div class="tag-card-body" id="body-${tag.id}">
@@ -238,6 +286,101 @@ function renderTagList() {
   renderGroup(work, '💼 Work');
   renderGroup(personal, '🌿 Personal');
   container.innerHTML = html;
+}
+
+// ── RENDER TAG EDITOR ──
+function renderTagEditor() {
+  const container = document.getElementById('tag-editor-content');
+  if (!container) return;
+  let html = '';
+  const renderGroup = (tags, groupKey, groupLabel) => {
+    html += `<div style="font-size:11px;text-transform:uppercase;letter-spacing:.12em;color:var(--text-soft);font-weight:600;margin:14px 0 8px">${groupLabel}</div>`;
+    html += `<div id="editor-group-${groupKey}">`;
+    tags.forEach(tag => {
+      html += `<div class="tag-edit-row" id="edit-row-${tag.id}">
+        <span class="tag-edit-emoji">${tag.emoji}</span>
+        <span class="tag-edit-name">${tag.label}</span>
+        <button class="tag-action-btn" onclick="editTagInline('${groupKey}','${tag.id}')">Edit</button>
+        <button class="tag-del-btn" onclick="deleteTag('${groupKey}','${tag.id}')">Delete</button>
+      </div>`;
+    });
+    html += `</div>`;
+    html += `<button class="add-tag-btn" onclick="addTagInline('${groupKey}')">+ Add tag</button>`;
+  };
+  renderGroup(TAGS_CONFIG.work, 'work', '💼 Work');
+  renderGroup(TAGS_CONFIG.personal, 'personal', '🌿 Personal');
+  container.innerHTML = html;
+}
+
+// ── EDIT TAG INLINE ──
+window.editTagInline = function(group, tagId) {
+  const tag = TAGS_CONFIG[group].find(t => t.id === tagId);
+  if (!tag) return;
+  const row = document.getElementById('edit-row-' + tagId);
+  row.outerHTML = `<div class="tag-inline-form" id="edit-row-${tagId}">
+    <input class="tag-inline-input tag-emoji-input" id="edit-emoji-${tagId}" value="${tag.emoji}" maxlength="4" placeholder="😀">
+    <input class="tag-inline-input tag-label-input" id="edit-label-${tagId}" value="${tag.label}" placeholder="Tag name">
+    <button class="tag-form-btn tag-form-save" onclick="saveTagEdit('${group}','${tagId}')">Save</button>
+    <button class="tag-form-btn tag-form-cancel" onclick="renderTagEditor()">Cancel</button>
+  </div>`;
+  document.getElementById('edit-label-' + tagId).focus();
+}
+
+// ── SAVE TAG EDIT ──
+window.saveTagEdit = function(group, tagId) {
+  const emoji = document.getElementById('edit-emoji-' + tagId).value.trim() || '🏷';
+  const label = document.getElementById('edit-label-' + tagId).value.trim();
+  if (!label) { toast('Tag name required'); return; }
+  const idx = TAGS_CONFIG[group].findIndex(t => t.id === tagId);
+  if (idx === -1) return;
+  TAGS_CONFIG[group][idx] = {...TAGS_CONFIG[group][idx], emoji, label};
+  buildTagMeta();
+  renderTagEditor();
+}
+
+// ── DELETE TAG ──
+window.deleteTag = function(group, tagId) {
+  const tag = TAGS_CONFIG[group].find(t => t.id === tagId);
+  if (!confirm(`Delete tag "${tag ? tag.emoji + ' ' + tag.label : tagId}"? Tasks with this tag won't lose data, but the tag won't appear in filters.`)) return;
+  TAGS_CONFIG[group] = TAGS_CONFIG[group].filter(t => t.id !== tagId);
+  buildTagMeta();
+  renderTagEditor();
+}
+
+// ── ADD TAG INLINE ──
+window.addTagInline = function(group) {
+  const groupDiv = document.getElementById('editor-group-' + group);
+  const newId = 'new-' + Date.now();
+  const formHtml = `<div class="tag-inline-form" id="edit-row-${newId}">
+    <input class="tag-inline-input tag-emoji-input" id="edit-emoji-${newId}" placeholder="😀" maxlength="4">
+    <input class="tag-inline-input tag-label-input" id="edit-label-${newId}" placeholder="Tag name">
+    <button class="tag-form-btn tag-form-save" onclick="addTagSave('${group}','${newId}')">Add</button>
+    <button class="tag-form-btn tag-form-cancel" onclick="renderTagEditor()">Cancel</button>
+  </div>`;
+  groupDiv.insertAdjacentHTML('beforeend', formHtml);
+  document.getElementById('edit-emoji-' + newId).focus();
+}
+
+// ── ADD TAG SAVE ──
+window.addTagSave = function(group, newId) {
+  const emoji = document.getElementById('edit-emoji-' + newId).value.trim() || '🏷';
+  const label = document.getElementById('edit-label-' + newId).value.trim();
+  if (!label) { toast('Tag name required'); return; }
+  const id = label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const allIds = [...TAGS_CONFIG.work, ...TAGS_CONFIG.personal].map(t => t.id);
+  if (allIds.includes(id)) { toast('Tag ID "' + id + '" already exists'); return; }
+  TAGS_CONFIG[group].push({id, label, emoji});
+  buildTagMeta();
+  renderTagEditor();
+}
+
+// ── SAVE TAGS ──
+window.saveTags = async function() {
+  try {
+    await setDoc(doc(db,'meta','tags'), TAGS_CONFIG);
+    showBadge('tags-saved');
+    renderTagList();
+  } catch(e) { toast('Error saving tags: ' + e.message); }
 }
 
 // ── TOGGLE TAG ──

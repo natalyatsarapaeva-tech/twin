@@ -130,13 +130,10 @@
 
     <!-- TAG EDITOR -->
     <div class="section">
-      <div class="section-title">
-        <span>Tags</span>
-        <button class="save-btn" style="font-size:11px;padding:5px 12px;margin-top:0" onclick="saveTags()">Save tags</button>
-      </div>
-      <div class="section-desc">Add, rename, or remove tags. Hit "Save tags" after making changes — all pages will use the updated list.</div>
+      <div class="section-title">Tags</div>
+      <div class="section-desc">Add, rename, or remove tags. Changes save automatically and apply across the whole app.</div>
       <div id="tag-editor-content"></div>
-      <span class="saved-badge" id="tags-saved">✓ Tags saved</span>
+      <span class="saved-badge" id="tags-saved">✓ Saved</span>
     </div>
 
     <!-- PER-TAG CONTEXTS -->
@@ -327,7 +324,7 @@ window.editTagInline = function(group, tagId) {
 }
 
 // ── SAVE TAG EDIT ──
-window.saveTagEdit = function(group, tagId) {
+window.saveTagEdit = async function(group, tagId) {
   const emoji = document.getElementById('edit-emoji-' + tagId).value.trim() || '🏷';
   const label = document.getElementById('edit-label-' + tagId).value.trim();
   if (!label) { toast('Tag name required'); return; }
@@ -336,15 +333,17 @@ window.saveTagEdit = function(group, tagId) {
   TAGS_CONFIG[group][idx] = {...TAGS_CONFIG[group][idx], emoji, label};
   buildTagMeta();
   renderTagEditor();
+  await persistTags();
 }
 
 // ── DELETE TAG ──
-window.deleteTag = function(group, tagId) {
+window.deleteTag = async function(group, tagId) {
   const tag = TAGS_CONFIG[group].find(t => t.id === tagId);
   if (!confirm(`Delete tag "${tag ? tag.emoji + ' ' + tag.label : tagId}"? Tasks with this tag won't lose data, but the tag won't appear in filters.`)) return;
   TAGS_CONFIG[group] = TAGS_CONFIG[group].filter(t => t.id !== tagId);
   buildTagMeta();
   renderTagEditor();
+  await persistTags();
 }
 
 // ── ADD TAG INLINE ──
@@ -362,7 +361,7 @@ window.addTagInline = function(group) {
 }
 
 // ── ADD TAG SAVE ──
-window.addTagSave = function(group, newId) {
+window.addTagSave = async function(group, newId) {
   const emoji = document.getElementById('edit-emoji-' + newId).value.trim() || '🏷';
   const label = document.getElementById('edit-label-' + newId).value.trim();
   if (!label) { toast('Tag name required'); return; }
@@ -372,10 +371,11 @@ window.addTagSave = function(group, newId) {
   TAGS_CONFIG[group].push({id, label, emoji});
   buildTagMeta();
   renderTagEditor();
+  await persistTags();
 }
 
-// ── SAVE TAGS ──
-window.saveTags = async function() {
+// ── PERSIST TAGS (internal) ──
+async function persistTags() {
   try {
     await setDoc(doc(db,'meta','tags'), TAGS_CONFIG);
     showBadge('tags-saved');

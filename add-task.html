@@ -111,13 +111,6 @@
 
 <div class="body">
 
-  <!-- API KEY -->
-  <div class="api-box">
-    <label>OpenAI API Key</label>
-    <input type="password" id="api-key" placeholder="sk-..." autocomplete="off"/>
-    <div class="api-note">🔒 Stored only in your browser</div>
-  </div>
-
   <!-- MANUAL FORM -->
   <div class="section">
     <div class="section-title">📋 Main info</div>
@@ -226,7 +219,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, collection } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD1uWPrp12lvpyBzXCOq9IrMuTU4uOTRao",
@@ -278,12 +271,18 @@ let selectedTags = [];
 let batchResults = [];
 let batchSelected = [];
 
-// ── API KEY ──
-const saved = localStorage.getItem('openai_api_key');
-if (saved) document.getElementById('api-key').value = saved;
-document.getElementById('api-key').addEventListener('change', e => {
-  if (e.target.value.trim()) localStorage.setItem('openai_api_key', e.target.value.trim());
-});
+// ── WORKER ──
+const WORKER_URL = 'https://twin-worker.natalyatsarapaeva.workers.dev';
+async function gpt(payload) {
+  const res = await fetch(`${WORKER_URL}/ai`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message || 'AI error');
+  return data;
+}
 
 // ── TAGS ──
 function renderTagGrid() {
@@ -388,11 +387,7 @@ window.saveTask = async function() {
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
     await setDoc(doc(db, 'tasks', id), task);
-    // Fire-and-forget tag summary update
-    if (task.tags.length) {
-      const ak = document.getElementById('api-key').value.trim() || localStorage.getItem('openai_api_key') || '';
-      if (ak) triggerTagSummaryFromAdd(task.tags, ak);
-    }
+    if (task.tags.length) triggerTagSummaryFromAdd(task.tags);
     toast('✅ Task saved!');
     setTimeout(() => window.location.href = 'index.html', 1200);
   } catch(e) {
@@ -403,8 +398,6 @@ window.saveTask = async function() {
 
 // ── AI BATCH ──
 window.analyzeBatch = async function() {
-  const apiKey = document.getElementById('api-key').value.trim() || localStorage.getItem('openai_api_key') || '';
-  if (!apiKey) { toast('Please enter your OpenAI API key ☝️'); return; }
   const text = document.getElementById('batch-text').value.trim();
   if (!text) { toast('Paste your task list'); return; }
 
@@ -428,16 +421,10 @@ Available tags — Work: ${WORK_TAGS.join(', ')} | Personal: ${PERSONAL_TAGS.joi
 Auto-detect tags from context. Translate any non-English input to English. Today: ${new Date().toISOString().split('T')[0]}.`;
 
   try {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
-      body:JSON.stringify({model:'gpt-4o',max_tokens:2000,messages:[
-        {role:'system',content:systemPrompt},
-        {role:'user',content:'Список дел:\n\n'+text}
-      ]})
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message || 'OpenAI error');
+    const data = await gpt({model:'gpt-4o',max_tokens:2000,messages:[
+      {role:'system',content:systemPrompt},
+      {role:'user',content:'Список дел:\n\n'+text}
+    ]});
     const raw = data.choices[0].message.content.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'');
     batchResults = JSON.parse(raw);
     batchSelected = batchResults.map(() => true);
@@ -545,27 +532,19 @@ function bPos(e){const r=batchCanvas.getBoundingClientRect();return[e.clientX-r.
 window.clearBatchAnnotation = function(){if(!batchCanvas||!batchImgData)return;const img=new Image();img.onload=()=>batchCtx.drawImage(img,0,0,batchCanvas.width,batchCanvas.height);img.src=batchImgData.dataUrl;};
 window.removeBatchImage = function(){batchImgData=null;batchCanvas=null;document.getElementById('batch-img-preview').style.display='none';};
 window.analyzeBatchImage = async function(){
-  const apiKey = document.getElementById('api-key').value.trim()||localStorage.getItem('openai_api_key')||'';
-  if(!apiKey){toast('Enter OpenAI API key ☝️');return;}
   if(!batchCanvas){toast('No image loaded');return;}
   const dataUrl=batchCanvas.toDataURL('image/jpeg',0.85);
   const base64=dataUrl.split(',')[1];
   const btn=document.getElementById('batch-btn');
   btn.textContent='⏳ Analyzing image…';
   try {
-    const res = await fetch('https://api.openai.com/v1/chat/completions',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
-      body:JSON.stringify({model:'gpt-4o',max_tokens:1500,messages:[
-        {role:'system',content:'You are a task extraction assistant. Extract all tasks, to-dos, action items from images (handwriting, screenshots, notes). Return ONLY a JSON array, no markdown: [{"title":"...","tags":[],"dueDate":null,"priority":"none","status":"new"}]. Translate everything to English.'},
-        {role:'user',content:[
-          {type:'image_url',image_url:{url:`data:image/jpeg;base64,${base64}`,detail:'high'}},
-          {type:'text',text:'Extract all tasks and action items from this image as a JSON array.'}
-        ]}
-      ]})
-    });
-    const data=await res.json();
-    if(!res.ok) throw new Error(data.error?.message||'OpenAI error');
+    const data=await gpt({model:'gpt-4o',max_tokens:1500,messages:[
+      {role:'system',content:'You are a task extraction assistant. Extract all tasks, to-dos, action items from images (handwriting, screenshots, notes). Return ONLY a JSON array, no markdown: [{"title":"...","tags":[],"dueDate":null,"priority":"none","status":"new"}]. Translate everything to English.'},
+      {role:'user',content:[
+        {type:'image_url',image_url:{url:`data:image/jpeg;base64,${base64}`,detail:'high'}},
+        {type:'text',text:'Extract all tasks and action items from this image as a JSON array.'}
+      ]}
+    ]});
     const raw=data.choices[0].message.content.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'');
     batchResults=JSON.parse(raw);
     batchSelected=batchResults.map(()=>true);
@@ -576,31 +555,23 @@ window.analyzeBatchImage = async function(){
 };
 
 // Fire-and-forget tag summary update after task save
-async function triggerTagSummaryFromAdd(tags, apiKey) {
+async function triggerTagSummaryFromAdd(tags) {
   try {
-    const { getDocs, collection: _col, doc: _doc, setDoc: _setDoc, getFirestore: _gf } = 
-      await import("https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js");
-    const _db = _gf(app);
-    const snap = await getDocs(_col(_db, 'tasks'));
+    const snap = await getDocs(collection(db, 'tasks'));
     const allTasks = snap.docs.map(d => ({id:d.id,...d.data()}));
+    const TAG_LABELS = Object.fromEntries([...TAGS_CONFIG.work,...TAGS_CONFIG.personal].map(t=>[t.id,t.label]));
     for (const tagId of tags) {
       const tagTasks = allTasks.filter(t => (t.tags||[]).includes(tagId));
       if (!tagTasks.length) continue;
       const taskList = tagTasks.map(t =>
         `[${t.status}] ${t.title}${t.notes?' | '+t.notes.slice(0,80):''}${(t.subtasks||[]).length?' | '+t.subtasks.length+' subtasks':''}`
       ).join('\n');
-      const TAG_LABELS = Object.fromEntries([...TAGS_CONFIG.work,...TAGS_CONFIG.personal].map(t=>[t.id,t.label]));
-      const res = await fetch('https://api.openai.com/v1/chat/completions',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
-        body:JSON.stringify({model:'gpt-4o',max_tokens:200,temperature:0.3,messages:[
-          {role:'system',content:'Write a 3-5 sentence project summary for an AI assistant. Cover: current status, main open items, recently completed. Be specific. English only.'},
-          {role:'user',content:`Area: ${TAG_LABELS[tagId]||tagId}\n\nTasks:\n${taskList}`}
-        ]})
-      });
-      const data = await res.json();
+      const data = await gpt({model:'gpt-4o',max_tokens:200,temperature:0.3,messages:[
+        {role:'system',content:'Write a 3-5 sentence project summary for an AI assistant. Cover: current status, main open items, recently completed. Be specific. English only.'},
+        {role:'user',content:`Area: ${TAG_LABELS[tagId]||tagId}\n\nTasks:\n${taskList}`}
+      ]});
       const summary = data.choices[0].message.content.trim();
-      await _setDoc(_doc(_db,'contexts','tag-'+tagId),
+      await setDoc(doc(db,'contexts','tag-'+tagId),
         {taskSummary:summary,summaryUpdatedAt:new Date().toISOString()},{merge:true});
     }
   } catch(e) { /* silent */ }

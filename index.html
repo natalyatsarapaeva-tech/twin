@@ -346,6 +346,19 @@ let searchQuery = '';
 let sortAsc = true;
 window.db = db;
 
+// ── WORKER ──
+const WORKER_URL = 'https://twin-worker.natalyatsarapaeva.workers.dev';
+async function gpt(payload) {
+  const res = await fetch(`${WORKER_URL}/ai`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message || 'AI error');
+  return data;
+}
+
 // ── TAG TAXONOMY ──
 // ── TAGS ──
 const DEFAULT_TAGS = {
@@ -877,7 +890,7 @@ RULES:
 }
 
 // ── CLASSIFIER (silent) ──
-async function classifyAndGetContext(userMessage, apiKey) {
+async function classifyAndGetContext(userMessage) {
   const quickList = allTasks.map(t =>
     `[${t.id}] ${t.title} | tags:${(t.tags||[]).join(',')}`
   ).join('\n');
@@ -899,13 +912,8 @@ Tags: dev,strategy,analytics,clients,leads,ux,kids,health,urgent,ideas,money,hom
 isGeneral=true if the question is intentionally broad (e.g. "what should I do today?")`;
 
   try {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
-      body:JSON.stringify({model:'gpt-4o',max_tokens:250,temperature:0,
-        messages:[{role:'user',content:prompt}]})
-    });
-    const data = await res.json();
+    const data = await gpt({model:'gpt-4o',max_tokens:250,temperature:0,
+      messages:[{role:'user',content:prompt}]});
     const raw = data.choices[0].message.content.trim()
       .replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'');
     const c = JSON.parse(raw);
@@ -946,8 +954,7 @@ isGeneral=true if the question is intentionally broad (e.g. "what should I do to
 
 // ── AUTO CHAT SUMMARY ──
 async function autoSummariseChat() {
-  const apiKey = localStorage.getItem('openai_api_key');
-  if (!apiKey || chatHistory.length < 6) return;
+  if (chatHistory.length < 6) return;
 
   const historyText = chatHistory
     .filter(m => typeof m.content === 'string') // skip image messages
@@ -955,15 +962,10 @@ async function autoSummariseChat() {
     .join('\n');
 
   try {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
-      body:JSON.stringify({model:'gpt-4o',max_tokens:200,temperature:0.3,messages:[
-        {role:'system',content:'Summarise this AI conversation in 3-5 lines: what was discussed, what was decided or created, any important context. Be specific and factual. English only.'},
-        {role:'user',content:historyText}
-      ]})
-    });
-    const data = await res.json();
+    const data = await gpt({model:'gpt-4o',max_tokens:200,temperature:0.3,messages:[
+      {role:'system',content:'Summarise this AI conversation in 3-5 lines: what was discussed, what was decided or created, any important context. Be specific and factual. English only.'},
+      {role:'user',content:historyText}
+    ]});
     const summary = data.choices[0].message.content.trim();
     const dateLine = `\n[${new Date().toLocaleDateString('en-GB')}] ${summary}`;
 
@@ -988,8 +990,7 @@ async function autoSummariseChat() {
 
 // ── TASK SUMMARY FOR TAG (called after save, fire-and-forget) ──
 async function updateTagTaskSummary(tags) {
-  const apiKey = localStorage.getItem('openai_api_key');
-  if (!apiKey || !tags || !tags.length) return;
+  if (!tags || !tags.length) return;
 
   for (const tagId of tags) {
     const tagTasks = allTasks.filter(t => (t.tags||[]).includes(tagId));
@@ -1000,15 +1001,10 @@ async function updateTagTaskSummary(tags) {
     ).join('\n');
 
     try {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
-        body:JSON.stringify({model:'gpt-4o',max_tokens:200,temperature:0.3,messages:[
-          {role:'system',content:'Write a 3-5 sentence project summary for an AI assistant. Cover: what this area is about, current status, main open items, recently completed work. Be specific and factual. English only.'},
-          {role:'user',content:`Area: ${TAG_META[tagId]?.label || tagId}\n\nTasks:\n${taskList}`}
-        ]})
-      });
-      const data = await res.json();
+      const data = await gpt({model:'gpt-4o',max_tokens:200,temperature:0.3,messages:[
+        {role:'system',content:'Write a 3-5 sentence project summary for an AI assistant. Cover: what this area is about, current status, main open items, recently completed work. Be specific and factual. English only.'},
+        {role:'user',content:`Area: ${TAG_META[tagId]?.label || tagId}\n\nTasks:\n${taskList}`}
+      ]});
       const summary = data.choices[0].message.content.trim();
 
       // Update cache and Firebase
@@ -1135,11 +1131,6 @@ async function executeAction(action) {
 
 // ── MAIN SEND FUNCTION ──
 window.sendChatMessage = async function() {
-  const apiKey = localStorage.getItem('openai_api_key');
-  if (!apiKey) {
-    addChatBubble('ai', '🔑 API key not found. Open "New Task" and enter your OpenAI key — it saves automatically.');
-    return;
-  }
   const input = document.getElementById('chat-input');
   const text = input.value.trim();
   const hasImages = chatImages && chatImages.length > 0;
@@ -1187,21 +1178,15 @@ window.sendChatMessage = async function() {
 
   try {
     // Step 1: Classify silently
-    const {relevantTags, contextTasks, topic} = await classifyAndGetContext(text||'image input', apiKey);
+    const {relevantTags, contextTasks, topic} = await classifyAndGetContext(text||'image input');
 
     // Step 2: Build rich prompt with all context layers
     updateBubble(loadingId, '⏳ Thinking…');
     const systemPrompt = await buildRichSystemPrompt(relevantTags, contextTasks, topic);
 
     // Step 3: Main call
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
-      body:JSON.stringify({model:'gpt-4o',max_tokens:1200,
-        messages:[{role:'system',content:systemPrompt},...chatHistory]})
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message||'OpenAI error');
+    const data = await gpt({model:'gpt-4o',max_tokens:1200,
+      messages:[{role:'system',content:systemPrompt},...chatHistory]});
 
     const reply = data.choices[0].message.content;
     chatHistory.push({role:'assistant',content:reply});
@@ -1419,8 +1404,6 @@ let monthlySuggestions = [];
 let monthlySelected = [];
 
 window.openMonthlySuggestions = async function() {
-  const apiKey = localStorage.getItem('openai_api_key');
-  if (!apiKey) { alert('Please save your OpenAI API key first'); return; }
 
   // Check if already generated this month
   const thisMonth = todayStr().slice(0,7); // YYYY-MM
@@ -1478,13 +1461,7 @@ Return ONLY a JSON array, no markdown:
 Supported tags: ${[...WORK_TAGS,...PERSONAL_TAGS].join(',')}
 Be specific to the month and user context. Think about seasonal tasks, monthly recurring activities, timely opportunities.`;
 
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
-      body:JSON.stringify({model:'gpt-4o',max_tokens:800,messages:[{role:'user',content:prompt}]})
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message||'OpenAI error');
+    const data = await gpt({model:'gpt-4o',max_tokens:800,messages:[{role:'user',content:prompt}]});
     const raw = data.choices[0].message.content.trim()
       .replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'');
     monthlySuggestions = JSON.parse(raw);

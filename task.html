@@ -754,7 +754,17 @@ window.saveEditModal = async function() {
 // • Все три получают полный контекст текущего дела + дел по теме
 // ══════════════════════════════════════════════
 
-async function getApiKey() { return localStorage.getItem('openai_api_key') || ''; }
+const WORKER_URL = 'https://twin-worker.natalyatsarapaeva.workers.dev';
+async function gpt(payload) {
+  const res = await fetch(`${WORKER_URL}/ai`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message || 'AI error');
+  return data;
+}
 
 // ── КОНТЕКСТ ПО ТЕГУ ──
 // Загружаем дела с теми же тегами из Firebase для передачи в промпт
@@ -807,9 +817,6 @@ Be specific, use real data from context.`;
 
 // ── ЧЕРНОВИК РЕШЕНИЯ ──
 window.aiDraft = async function() {
-  const apiKey = await getApiKey();
-  if (!apiKey) { toast('Please save your OpenAI API key first'); return; }
-
   const el = document.getElementById('ai-result');
   el.classList.add('open');
 
@@ -841,7 +848,7 @@ window.aiDraft = async function() {
 
     // STEP 1 — identify research categories
     stepActive('rs1');
-    const planRaw = await callGPT(apiKey, sysPrompt,
+    const planRaw = await callGPT(sysPrompt,
       `For the task "${task.title}", identify which research categories apply. Return ONLY a JSON array of strings from this list:
 ["legal","purchases","travel_options","people_contacts","tools_services","costs_budget","timeline","risks","alternatives"]
 Return only what's actually relevant for this specific task. Minimum 1, maximum 5.`
@@ -873,7 +880,7 @@ Return only what's actually relevant for this specific task. Minimum 1, maximum 
     const research = {};
     for (const cat of categories.slice(0,5)) {
       const prompt = PROMPTS[cat] || `Research the ${cat} dimension of this task. Be practical and specific.`;
-      research[cat] = await callGPT(apiKey, sysPrompt,
+      research[cat] = await callGPT(sysPrompt,
         `${prompt}\n\nTask context: "${task.title}". 3-5 bullet points, concise.`
       );
     }
@@ -884,7 +891,7 @@ Return only what's actually relevant for this specific task. Minimum 1, maximum 
     const researchBlock = Object.entries(research)
       .map(([k,v]) => `### ${k.toUpperCase().replace(/_/g,' ')}\n${v}`).join('\n\n');
 
-    const draft = await callGPT(apiKey, sysPrompt,
+    const draft = await callGPT(sysPrompt,
       `Write a concise actionable research brief for: "${task.title}"
 
 RESEARCH FINDINGS:
@@ -928,13 +935,11 @@ window.saveDraftToNotes = async function(btn) {
 
 // ── ПРЕДЛОЖИТЬ ПОДЗАДАЧИ ──
 window.aiSuggestSubtasks = async function() {
-  const apiKey = await getApiKey();
-  if (!apiKey) { toast('Please save your OpenAI API key first'); return; }
   showAiResult('🔍 Analyzing context…');
   try {
     const siblings = await loadSiblingTasks();
     showAiResult('⏳ Thinking…');
-    const res = await callGPT(apiKey,
+    const res = await callGPT(
       buildSystemPromptTask(siblings),
       `Suggest 4-6 new subtasks for task "${task.title}".
 Don't duplicate existing subtasks. Consider related tasks context.
@@ -980,12 +985,10 @@ window.parseTextInput = async function() {
 }
 
 async function aiParseSubtasks(text) {
-  const apiKey = await getApiKey();
-  if (!apiKey) { toast('Please save your OpenAI API key first'); return; }
   showAiResult('⏳ Parsing text…');
   try {
     const siblings = await loadSiblingTasks();
-    const res = await callGPT(apiKey,
+    const res = await callGPT(
       buildSystemPromptTask(siblings),
       `The user sent text for task "${task.title}". Extract the list of subtasks.
 Текст:\n\n${text}\n\n
@@ -1068,21 +1071,15 @@ window.removeProposal = function(i) {
   else rejectAi();
 }
 
-async function callGPT(apiKey, systemMsg, userMsg) {
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
-    body: JSON.stringify({
-      model: 'gpt-4o',
-      max_tokens: 1000,
-      messages: [
-        {role:'system', content: systemMsg},
-        {role:'user', content: userMsg}
-      ]
-    })
+async function callGPT(systemMsg, userMsg) {
+  const data = await gpt({
+    model: 'gpt-4o',
+    max_tokens: 1000,
+    messages: [
+      {role:'system', content: systemMsg},
+      {role:'user', content: userMsg}
+    ]
   });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error?.message || 'OpenAI error');
   return data.choices[0].message.content;
 }
 
@@ -1122,27 +1119,19 @@ function aiPos(e, canvas) { const r=canvas.getBoundingClientRect(); return [e.cl
 window.clearAiAnnotation = function() { if(!aiAnnotCanvas||!aiImageData)return; const img=new Image(); img.onload=()=>aiAnnotCtx.drawImage(img,0,0,aiAnnotCanvas.width,aiAnnotCanvas.height); img.src=aiImageData.dataUrl; };
 window.removeAiImage = function() { aiImageData=null; aiAnnotCanvas=null; document.getElementById('ai-img-preview').style.display='none'; };
 window.analyzeAiImage = async function() {
-  const apiKey = await getApiKey();
-  if (!apiKey) { toast('Save your OpenAI API key first'); return; }
   if (!aiAnnotCanvas) return;
   const dataUrl = aiAnnotCanvas.toDataURL('image/jpeg', 0.85);
   const base64 = dataUrl.split(',')[1];
   showAiResult('⏳ Analyzing image…');
   try {
     const siblings = await loadSiblingTasks();
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
-      body:JSON.stringify({model:'gpt-4o',max_tokens:1000,messages:[
-        {role:'system',content:buildSystemPromptTask(siblings)},
-        {role:'user',content:[
-          {type:'image_url',image_url:{url:`data:image/jpeg;base64,${base64}`,detail:'high'}},
-          {type:'text',text:`This image is related to the task "${task.title}". Extract any tasks, subtasks, notes, or action items visible. Return them as JSON subtask array if actionable: [{"title":"...","note":"...","dueDate":null,"status":"new","assigned":""}]`}
-        ]}
-      ]})
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error?.message||'OpenAI error');
+    const data = await gpt({model:'gpt-4o',max_tokens:1000,messages:[
+      {role:'system',content:buildSystemPromptTask(siblings)},
+      {role:'user',content:[
+        {type:'image_url',image_url:{url:`data:image/jpeg;base64,${base64}`,detail:'high'}},
+        {type:'text',text:`This image is related to the task "${task.title}". Extract any tasks, subtasks, notes, or action items visible. Return them as JSON subtask array if actionable: [{"title":"...","note":"...","dueDate":null,"status":"new","assigned":""}]`}
+      ]}
+    ]});
     const reply = data.choices[0].message.content;
     const clean = reply.replace(/^```json\s*/m,'').replace(/^```\s*/m,'').replace(/\s*```$/m,'').trim();
     try {
@@ -1173,8 +1162,7 @@ async function save() {
 
 // Fire-and-forget tag summary update
 async function triggerTagSummaryUpdate(tags) {
-  const apiKey = localStorage.getItem('openai_api_key');
-  if (!apiKey || !tags || !tags.length) return;
+  if (!tags || !tags.length) return;
   try {
     const snap = await getDocs(collection(db, 'tasks'));
     const allTasks = snap.docs.map(d => ({id:d.id,...d.data()}));
@@ -1185,18 +1173,10 @@ async function triggerTagSummaryUpdate(tags) {
         `[${t.status}] ${t.title}${t.notes?' | '+t.notes.slice(0,80):''}${(t.subtasks||[]).length?' | '+t.subtasks.length+' subtasks':''}`
       ).join('\n');
       const TAG_LABELS = Object.fromEntries([...TAGS_CONFIG.work,...TAGS_CONFIG.personal].map(t=>[t.id,t.label]));
-      const res = await fetch('https://api.openai.com/v1/chat/completions',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
-        body:JSON.stringify({model:'gpt-4o',max_tokens:200,temperature:0.3,messages:[
-          {role:'system',content:'Write a 3-5 sentence project summary for an AI assistant. Cover: what this area is about, current status, main open items, recently completed. Be specific. English only.'},
-          {role:'user',content:`Area: ${TAG_LABELS[tagId]||tagId}
-
-Tasks:
-${taskList}`}
-        ]})
-      });
-      const data = await res.json();
+      const data = await gpt({model:'gpt-4o',max_tokens:200,temperature:0.3,messages:[
+        {role:'system',content:'Write a 3-5 sentence project summary for an AI assistant. Cover: what this area is about, current status, main open items, recently completed. Be specific. English only.'},
+        {role:'user',content:`Area: ${TAG_LABELS[tagId]||tagId}\n\nTasks:\n${taskList}`}
+      ]});
       const summary = data.choices[0].message.content.trim();
       await setDoc(doc(db,'contexts','tag-'+tagId),
         {taskSummary:summary, summaryUpdatedAt:new Date().toISOString()},{merge:true});

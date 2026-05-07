@@ -131,15 +131,32 @@ async function handleTest(request, env) {
 }
 
 // ── GPT task parser ─────────────────────────────────────────────────────────
+async function loadTagIds(env) {
+  try {
+    const token = await getFirebaseToken(env);
+    const url = `https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/meta/tags`;
+    const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+    const data = await res.json();
+    const extractIds = arr => (arr?.values || []).map(v => v.mapValue?.fields?.id?.stringValue).filter(Boolean);
+    return [
+      ...extractIds(data.fields?.work?.arrayValue),
+      ...extractIds(data.fields?.personal?.arrayValue)
+    ];
+  } catch(e) {
+    return ['dev','strategy','analytics','clients','leads','ux','kids','health','urgent','ideas','money','home','travel','rest','swedish'];
+  }
+}
+
 async function parseTask(text, env) {
   const today = new Date().toISOString().split('T')[0];
+  const tagIds = await loadTagIds(env);
   const prompt = `Extract a task from this text. Return ONLY JSON (no markdown):
 {
   "title": "concise action title in English",
   "description": "details if any",
   "priority": "high|med|low|none",
   "deadline": "YYYY-MM-DD or null",
-  "tags": ["one or two from: dev,strategy,analytics,clients,leads,ux,kids,health,urgent,ideas,money,home,travel,rest,swedish"],
+  "tags": ["one or two from: ${tagIds.join(',')}"],
   "status": "new"
 }
 Today: ${today}

@@ -40,6 +40,8 @@
     .chip-due{background:rgba(255,255,255,.15);color:var(--blue-pale);}
     .chip-due.overdue{background:rgba(192,90,90,.3);color:#f0b0b0;}
     .chip-due.today{background:rgba(196,154,74,.3);color:#f5d090;}
+    .gcal-btn{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:8px;font-size:12px;font-weight:500;background:rgba(255,255,255,.12);color:var(--blue-pale);border:1px solid rgba(255,255,255,.2);cursor:pointer;font-family:'DM Sans',sans-serif;text-decoration:none;margin-top:8px;}
+    .gcal-btn:hover{background:rgba(255,255,255,.2);}
     .chip-priority-high{background:rgba(192,90,90,.25);color:#f0b0b0;}
     .chip-priority-med{background:rgba(196,154,74,.25);color:#f5d090;}
     .chip-priority-low{background:rgba(90,158,130,.25);color:#a0e0c8;}
@@ -187,6 +189,7 @@
       <button class="edit-btn" onclick="openEditModal()">✏️ Edit</button>
     </div>
     <div class="task-meta-row" id="t-meta-row"></div>
+    <div id="t-gcal-wrap"></div>
     <div class="status-bar">
       <button class="status-opt s-new" data-s="new" onclick="setStatus('new',this)">New</button>
       <button class="status-opt s-prog" data-s="in-progress" onclick="setStatus('in-progress',this)">In Progress</button>
@@ -460,6 +463,14 @@ function render() {
     chips += `<span class="meta-chip" style="background:var(--lav-pale);color:var(--lavender);">♻ ${rLabel[task.recurring.frequency]||''} · next: ${task.recurring.nextDue||'–'}</span>`;
   }
   document.getElementById('t-meta-row').innerHTML = chips;
+
+  // Google Calendar button (only when deadline is set)
+  const gcalWrap = document.getElementById('t-gcal-wrap');
+  if (task.deadline) {
+    gcalWrap.innerHTML = `<a class="gcal-btn" href="${buildGCalUrl()}" target="_blank" rel="noopener">📆 Add to Google Calendar</a>`;
+  } else {
+    gcalWrap.innerHTML = '';
+  }
 
   // Status buttons
   document.querySelectorAll('.status-opt').forEach(b => {
@@ -1187,6 +1198,21 @@ async function triggerTagSummaryUpdate(tags) {
 // ── HELPERS ──
 window.goBack = () => window.location.href = 'index.html';
 function todayStr() { return new Date().toISOString().split('T')[0]; }
+
+function buildGCalUrl() {
+  const date = (task.deadline || '').replace(/-/g, '');
+  const nextDay = new Date(task.deadline);
+  nextDay.setDate(nextDay.getDate() + 1);
+  const end = nextDay.toISOString().split('T')[0].replace(/-/g, '');
+  const details = [task.description, task.notes].filter(Boolean).join('\n\n').slice(0, 1500);
+  const p = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: task.title,
+    dates: `${date}/${end}`,
+    details,
+  });
+  return `https://calendar.google.com/calendar/render?${p.toString()}`;
+}
 function deriveNextAction(task) {
   const pending = (task.subtasks||[]).filter(s => s.status !== 'done' && s.dueDate);
   if (!pending.length) return '';

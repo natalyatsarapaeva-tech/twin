@@ -1202,13 +1202,11 @@ function todayStr() { return new Date().toISOString().split('T')[0]; }
 function buildGCalUrl() {
   const date = (task.deadline || '').replace(/-/g, '');
   const details = [task.description, task.notes].filter(Boolean).join('\n\n').slice(0, 1500);
-  const p = new URLSearchParams({
-    action: 'TEMPLATE',
-    text: task.title,
-    dates: `${date}T073000/${date}T080000`,
-    details,
-  });
-  return `https://calendar.google.com/calendar/render?${p.toString()}`;
+  const base = 'https://calendar.google.com/calendar/render?action=TEMPLATE';
+  return base
+    + '&text=' + encodeURIComponent(task.title)
+    + '&dates=' + `${date}T073000/${date}T080000`
+    + '&details=' + encodeURIComponent(details);
 }
 function deriveNextAction(task) {
   const pending = (task.subtasks||[]).filter(s => s.status !== 'done' && s.dueDate);

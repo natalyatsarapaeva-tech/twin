@@ -347,7 +347,7 @@ let sortAsc = true;
 window.db = db;
 
 // ── WORKER ──
-const WORKER_URL = 'https://twin-worker.natalyatsarapaeva.workers.dev';
+const WORKER_URL = 'https://task-intake-worker.ntsarapaeva.workers.dev';
 async function gpt(payload) {
   const res = await fetch(`${WORKER_URL}/ai`, {
     method: 'POST',

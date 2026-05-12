@@ -17,7 +17,7 @@
  */
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     if (request.method === 'OPTIONS') return cors('', 204, request);
@@ -25,7 +25,7 @@ export default {
     try {
       if (url.pathname === '/ai')    return handleAI(request, env);
       if (url.pathname === '/email') return handleEmail(request, env);
-      if (url.pathname === '/slack') return handleSlack(request, env);
+      if (url.pathname === '/slack') return handleSlack(request, env, ctx);
       if (url.pathname === '/test')  return handleTest(request, env);
       return new Response('Not found', { status: 404 });
     } catch (e) {
@@ -85,21 +85,20 @@ async function handleEmail(request, env) {
 }
 
 // ── /slack — slash command ──────────────────────────────────────────────────
-async function handleSlack(request, env) {
+async function handleSlack(request, env, ctx) {
   const body = await request.text();
   const params = new URLSearchParams(body);
   const text = params.get('text') || '';
   const responseUrl = params.get('response_url');
 
-  // Immediate ack (Slack requires <3s)
-  const ack = { response_type: 'ephemeral', text: '⏳ Creating task…' };
-  const ackResponse = new Response(JSON.stringify(ack), {
-    headers: { 'Content-Type': 'application/json' }
-  });
+  // Ack immediately — Slack requires a response within 3 seconds
+  const ackResponse = new Response(
+    JSON.stringify({ response_type: 'ephemeral', text: '⏳ Creating task…' }),
+    { headers: { 'Content-Type': 'application/json' } }
+  );
 
-  // Process in background
-  const ctx = { waitUntil: p => p }; // fallback if no ExecutionContext
-  (async () => {
+  // Use ctx.waitUntil so the worker stays alive for GPT + Firestore after ack
+  ctx.waitUntil((async () => {
     const task = await parseTask(text, env);
     task.source = 'slack';
     await saveTask(task, env);
@@ -113,7 +112,7 @@ async function handleSlack(request, env) {
         })
       });
     }
-  })();
+  })());
 
   return ackResponse;
 }

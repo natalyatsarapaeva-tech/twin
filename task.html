@@ -294,6 +294,21 @@
   </div>
 </div>
 
+<!-- RECURRING DELETE MODAL -->
+<div class="modal-overlay" id="rec-del-overlay" onclick="closeRecDeleteModal()"></div>
+<div class="modal" id="rec-del-modal">
+  <div class="modal-handle"></div>
+  <div class="modal-header">
+    <div class="modal-title">Delete recurring task</div>
+    <button class="modal-close" onclick="closeRecDeleteModal()">×</button>
+  </div>
+  <div class="modal-body">
+    <p style="font-size:14px;color:var(--text-soft);margin:0 0 4px;line-height:1.45;">This is a recurring task. Delete only the current occurrence, or stop the whole series?</p>
+    <button class="modal-save" onclick="deleteThisOccurrence()">Just this occurrence</button>
+    <button class="modal-delete" onclick="deleteAllOccurrences()">🗑 All occurrences (stop series)</button>
+  </div>
+</div>
+
 <!-- EDIT TASK MODAL -->
 <div class="modal-overlay" id="edit-overlay" onclick="closeEditModal()"></div>
 <div class="modal" id="edit-modal">
@@ -1157,9 +1172,50 @@ window.analyzeAiImage = async function() {
 
 // ── DELETE TASK ──
 window.deleteTask = async function() {
+  // Recurring task: ask whether to drop just this occurrence or the whole series
+  if (task.recurring) {
+    document.getElementById('rec-del-overlay').style.display = 'block';
+    setTimeout(() => document.getElementById('rec-del-modal').classList.add('open'), 10);
+    return;
+  }
   if (!confirm(`Delete "${task.title}"? This cannot be undone.`)) return;
   await deleteDoc(doc(db, 'tasks', task.id));
   window.location.href = 'index.html';
+}
+
+window.closeRecDeleteModal = function() {
+  document.getElementById('rec-del-modal').classList.remove('open');
+  document.getElementById('rec-del-overlay').style.display = 'none';
+}
+
+// Roll this recurring task forward to its next occurrence (series continues)
+window.deleteThisOccurrence = async function() {
+  const rec = task.recurring;
+  const base = rec.nextDue || task.deadline || todayStr();
+  task.deadline = rec.nextDue || task.deadline;
+  task.recurring = { ...rec, nextDue: advanceDate(base, rec.frequency, rec.interval || 1) };
+  task.status = 'new';
+  task.doneAt = null;
+  task.subtasks = (task.subtasks || []).map(s => ({ ...s, status: 'new', doneAt: null }));
+  await setDoc(doc(db, 'tasks', task.id), task);
+  window.location.href = 'index.html';
+}
+
+// Delete the whole series — removing the template stops future occurrences
+window.deleteAllOccurrences = async function() {
+  await deleteDoc(doc(db, 'tasks', task.id));
+  window.location.href = 'index.html';
+}
+
+function advanceDate(dateStr, frequency, interval) {
+  const d = new Date(dateStr + 'T12:00:00');
+  switch(frequency) {
+    case 'daily':   d.setDate(d.getDate() + interval); break;
+    case 'weekly':  d.setDate(d.getDate() + 7 * interval); break;
+    case 'monthly': d.setMonth(d.getMonth() + interval); break;
+    case 'yearly':  d.setFullYear(d.getFullYear() + interval); break;
+  }
+  return d.toISOString().split('T')[0];
 }
 
 // ── SAVE ──

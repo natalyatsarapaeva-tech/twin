@@ -139,6 +139,27 @@
     .fab-map{width:46px;height:46px;background:var(--blue-light);font-size:20px;}
     .fab-ctx{width:46px;height:46px;background:var(--lav-pale);font-size:13px;color:var(--lavender);font-weight:800;letter-spacing:-.5px;font-family:'DM Sans',sans-serif;}
     .fab-cx-text{background:linear-gradient(135deg,#8b9fd4,#c9a0a0);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-size:14px;font-weight:800;letter-spacing:-.3px;}
+    .fab-bell{width:46px;height:46px;background:var(--green-pale);font-size:20px;color:var(--green);}
+    .fab-bell.active{background:var(--green);color:var(--white);}
+    /* notification settings modal */
+    .notif-section{border-bottom:1px solid var(--border);padding:14px 0;}
+    .notif-section:last-child{border-bottom:none;}
+    .notif-section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+    .notif-section-label{font-size:14px;font-weight:600;color:var(--text);}
+    .notif-options{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+    .notif-options label{font-size:12px;color:var(--text-soft);}
+    .notif-hour{padding:6px 8px;border-radius:8px;border:2px solid var(--border);font-family:'DM Sans',sans-serif;font-size:13px;background:var(--surface2);color:var(--text);}
+    .day-btns{display:flex;gap:4px;}
+    .day-btn{width:26px;height:26px;border-radius:50%;border:2px solid var(--border);background:none;font-size:11px;font-weight:600;cursor:pointer;color:var(--text-soft);font-family:'DM Sans',sans-serif;padding:0;display:flex;align-items:center;justify-content:center;}
+    .day-btn.on{background:var(--slate);color:var(--white);border-color:var(--slate);}
+    .toggle-sw{position:relative;width:40px;height:22px;display:inline-block;flex-shrink:0;}
+    .toggle-sw input{opacity:0;width:0;height:0;}
+    .toggle-sl{position:absolute;inset:0;background:var(--border);border-radius:22px;cursor:pointer;transition:.2s;}
+    .toggle-sl:before{content:'';position:absolute;width:16px;height:16px;left:3px;bottom:3px;background:white;border-radius:50%;transition:.2s;}
+    input:checked+.toggle-sl{background:var(--blue);}
+    input:checked+.toggle-sl:before{transform:translateX(18px);}
+    .device-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0 16px;border-bottom:1px solid var(--border);margin-bottom:4px;}
+    .device-btn{padding:8px 16px;border-radius:10px;background:var(--slate);color:var(--white);border:none;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;}
 
     /* ── ANIM ── */
     .fade-in{animation:fadeIn .3s ease both;}
@@ -278,12 +299,33 @@
   <div class="fab-group">
     <a class="fab fab-map" href="mindmap.html" title="Mind map">🗺️</a>
     <a class="fab fab-ctx" href="context.html" title="Context"><span class="fab-cx-text">CX</span></a>
+    <button class="fab fab-bell" id="bell-fab" onclick="openNotifModal()" title="Notifications">🔔</button>
     <button class="fab fab-ai" onclick="openChat()" title="AI chat">✨</button>
     <a class="fab" id="add-task-fab" href="add-task.html" title="New task" onclick="saveFilterForNewTask()">+</a>
   </div>
 </div>
 
 <!-- AI CHAT DRAWER -->
+<!-- NOTIFICATION SETTINGS MODAL -->
+<div class="chat-overlay" id="notif-overlay" onclick="closeNotifModal()" style="z-index:198;"></div>
+<div class="chat-drawer" id="notif-modal" style="z-index:199;max-height:90vh;">
+  <div class="chat-handle"></div>
+  <div class="chat-header-row">
+    <div class="chat-title">🔔 Notifications</div>
+    <button class="chat-close" onclick="closeNotifModal()">×</button>
+  </div>
+  <div style="overflow-y:auto;padding:0 20px 32px;">
+    <div class="device-row">
+      <span style="font-size:14px;font-weight:600;color:var(--text);">This device</span>
+      <button class="device-btn" id="device-push-btn" onclick="toggleDevicePush()">Enable</button>
+    </div>
+
+    <div id="notif-types-wrap">
+      <!-- rendered by renderNotifModal() -->
+    </div>
+  </div>
+</div>
+
 <div class="chat-overlay" id="chat-overlay" onclick="closeChat()"></div>
 <div class="chat-drawer" id="chat-drawer">
   <div class="chat-handle"></div>
@@ -1527,6 +1569,120 @@ function fmtDate(d) {
   return `${parseInt(day)} ${months[parseInt(m)-1]}`;
 }
 function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ══ NOTIFICATIONS ══
+const NOTIF_TYPES = [
+  { id:'todayTasks',   label:"Today's tasks",  defaultHour:8,  defaultDays:[1,2,3,4,5] },
+  { id:'weekAhead',    label:'Week ahead',      defaultHour:8,  defaultDays:[1] },
+  { id:'weeklyReview', label:'Weekly review',   defaultHour:20, defaultDays:[0] }
+];
+const DAY_LABELS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+let notifSettings = null;
+
+window.openNotifModal = async function() {
+  document.getElementById('notif-overlay').style.display = 'block';
+  setTimeout(() => document.getElementById('notif-modal').classList.add('open'), 10);
+  await loadNotifSettings();
+  renderNotifModal();
+  updateDevicePushBtn();
+};
+
+window.closeNotifModal = function() {
+  document.getElementById('notif-modal').classList.remove('open');
+  setTimeout(() => document.getElementById('notif-overlay').style.display = 'none', 350);
+};
+
+async function loadNotifSettings() {
+  try {
+    const snap = await getDoc(doc(db, 'meta', 'notificationSettings'));
+    notifSettings = snap.exists() ? snap.data() : defaultNotifSettings();
+  } catch(e) { notifSettings = defaultNotifSettings(); }
+}
+
+function defaultNotifSettings() {
+  return {
+    timezone: 'Europe/Stockholm',
+    todayTasks:   { enabled:false, hour:8,  days:[1,2,3,4,5] },
+    weekAhead:    { enabled:false, hour:8,  days:[1] },
+    weeklyReview: { enabled:false, hour:20, days:[0] }
+  };
+}
+
+function renderNotifModal() {
+  const wrap = document.getElementById('notif-types-wrap');
+  wrap.innerHTML = NOTIF_TYPES.map(type => {
+    const cfg = notifSettings[type.id] || { enabled:false, hour:type.defaultHour, days:type.defaultDays };
+    const hourOpts = Array.from({length:18}, (_,i) => {
+      const h = i + 5;
+      return `<option value="${h}" ${cfg.hour===h?'selected':''}>${String(h).padStart(2,'0')}:00</option>`;
+    }).join('');
+    const dayBtns = DAY_LABELS.map((label, i) =>
+      `<button class="day-btn ${cfg.days.includes(i)?'on':''}" data-type="${type.id}" data-day="${i}" onclick="toggleNotifDay(this)">${label}</button>`
+    ).join('');
+    return `<div class="notif-section">
+      <div class="notif-section-header">
+        <span class="notif-section-label">${type.label}</span>
+        <label class="toggle-sw">
+          <input type="checkbox" id="nt-${type.id}" ${cfg.enabled?'checked':''} onchange="saveNotifSettings()">
+          <span class="toggle-sl"></span>
+        </label>
+      </div>
+      <div class="notif-options">
+        <label>Time:</label>
+        <select class="notif-hour" id="nh-${type.id}" onchange="saveNotifSettings()">${hourOpts}</select>
+        <label>Days:</label>
+        <div class="day-btns">${dayBtns}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.toggleNotifDay = function(btn) {
+  btn.classList.toggle('on');
+  saveNotifSettings();
+};
+
+async function saveNotifSettings() {
+  const s = { timezone:'Europe/Stockholm' };
+  for (const type of NOTIF_TYPES) {
+    s[type.id] = {
+      enabled: document.getElementById(`nt-${type.id}`)?.checked || false,
+      hour:    Number(document.getElementById(`nh-${type.id}`)?.value || type.defaultHour),
+      days:    Array.from(document.querySelectorAll(`.day-btn[data-type="${type.id}"].on`)).map(b => Number(b.dataset.day))
+    };
+  }
+  notifSettings = s;
+  await setDoc(doc(db, 'meta', 'notificationSettings'), s);
+}
+
+async function updateDevicePushBtn() {
+  const btn = document.getElementById('device-push-btn');
+  if (!btn) return;
+  if (!window.twinPush) { btn.textContent = 'Not supported'; btn.disabled = true; return; }
+  const subscribed = await window.twinPush.isSubscribed();
+  if (subscribed) {
+    btn.textContent = 'Disable on this device';
+    btn.style.background = 'var(--green)';
+    document.getElementById('bell-fab').classList.add('active');
+  } else {
+    btn.textContent = 'Enable on this device';
+    btn.style.background = 'var(--slate)';
+    document.getElementById('bell-fab').classList.remove('active');
+  }
+}
+
+window.toggleDevicePush = async function() {
+  const btn = document.getElementById('device-push-btn');
+  btn.disabled = true; btn.textContent = '…';
+  const subscribed = await window.twinPush.isSubscribed();
+  if (subscribed) {
+    await window.twinPush.unsubscribe();
+  } else {
+    await window.twinPush.subscribe();
+  }
+  btn.disabled = false;
+  await updateDevicePushBtn();
+};
 </script>
 
 </body>

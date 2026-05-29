@@ -5,5 +5,8 @@
   "workers_dev": true,
   "observability": {
     "enabled": true
+  },
+  "triggers": {
+    "crons": ["0 * * * *"]
   }
 }

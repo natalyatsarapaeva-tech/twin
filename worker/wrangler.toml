@@ -1,8 +1,7 @@
-name = "twin-worker"
+name = "task-intake-worker"
 main = "task-intake-worker.js"
 compatibility_date = "2024-01-01"
 
-# Deploy: wrangler deploy
 # Secrets: wrangler secret put OPENAI_API_KEY
 #          wrangler secret put FIREBASE_PROJECT_ID
 #          wrangler secret put FIREBASE_CLIENT_EMAIL

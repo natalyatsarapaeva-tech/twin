@@ -87,10 +87,52 @@ async function handleEmail(request, env) {
   return new Response('OK', { status: 200 });
 }
 
-// ── /slack — slash command ──────────────────────────────────────────────────
+// ── /slack — Events API (bot channel) + slash command ───────────────────────
 async function handleSlack(request, env, ctx) {
-  const body = await request.text();
-  const params = new URLSearchParams(body);
+  const raw = await request.text();
+
+  // Events API sends JSON; slash commands send form-urlencoded.
+  let json = null;
+  try { json = JSON.parse(raw); } catch (_) {}
+
+  if (json) {
+    // 1) URL verification handshake — must echo the challenge to verify the URL
+    if (json.type === 'url_verification') {
+      return new Response(json.challenge, { headers: { 'Content-Type': 'text/plain' } });
+    }
+
+    // 2) Event callback — a message posted in a channel the bot is in
+    if (json.type === 'event_callback') {
+      // Slack retries failed deliveries — ignore retries to avoid duplicate tasks
+      if (request.headers.get('X-Slack-Retry-Num')) return new Response('', { status: 200 });
+
+      const event = json.event || {};
+      const text = (event.text || '').trim();
+      // Skip bot's own messages, edits/joins/etc., and empty text (prevents loops)
+      const skip = event.bot_id || event.subtype || event.type !== 'message' || !text;
+      if (!skip) {
+        ctx.waitUntil((async () => {
+          const task = await parseTask(text, env);
+          task.source = 'slack';
+          await saveTask(task, env);
+          // Confirm back in the channel if a bot token is configured (optional)
+          if (env.SLACK_BOT_TOKEN && event.channel) {
+            await fetch('https://slack.com/api/chat.postMessage', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json; charset=utf-8', 'Authorization': `Bearer ${env.SLACK_BOT_TOKEN}` },
+              body: JSON.stringify({ channel: event.channel, text: `✅ Task created: *${task.title}*`, thread_ts: event.ts })
+            });
+          }
+        })());
+      }
+      return new Response('', { status: 200 });
+    }
+
+    return new Response('', { status: 200 });
+  }
+
+  // 3) Fallback: slash command (application/x-www-form-urlencoded)
+  const params = new URLSearchParams(raw);
   const text = params.get('text') || '';
   const responseUrl = params.get('response_url');
   const ackResponse = new Response(

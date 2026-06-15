@@ -1414,7 +1414,8 @@ async function checkRecurringTasks() {
       notes: '',
       subtasks: (template.subtasks||[]).map(s => ({...s, status:'new', doneAt:null})),
       createdAt: new Date().toISOString(),
-      recurring: null // instance has no recurring — only template does
+      recurring: null, // instance has no recurring — only template does
+      recurringTemplateId: template.id
     };
     // Advance nextDue on template
     const rec = template.recurring;

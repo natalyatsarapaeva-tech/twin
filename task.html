@@ -358,7 +358,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, updateDoc, deleteDoc, setDoc, getDocs, collection } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, updateDoc, deleteDoc, setDoc, getDocs, collection, query, where } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyD1uWPrp12lvpyBzXCOq9IrMuTU4uOTRao",
@@ -1173,8 +1173,8 @@ window.analyzeAiImage = async function() {
 
 // ── DELETE TASK ──
 window.deleteTask = async function() {
-  // Recurring task: ask whether to drop just this occurrence or the whole series
-  if (task.recurring) {
+  // Show series dialog for both template (task.recurring) and instances (recurringTemplateId)
+  if (task.recurring || task.recurringTemplateId) {
     document.getElementById('rec-del-overlay').style.display = 'block';
     setTimeout(() => document.getElementById('rec-del-modal').classList.add('open'), 10);
     return;
@@ -1189,22 +1189,37 @@ window.closeRecDeleteModal = function() {
   document.getElementById('rec-del-overlay').style.display = 'none';
 }
 
-// Roll this recurring task forward to its next occurrence (series continues)
+// Delete just this occurrence; series template continues spawning future ones
 window.deleteThisOccurrence = async function() {
-  const rec = task.recurring;
-  const base = rec.nextDue || task.deadline || todayStr();
-  task.deadline = rec.nextDue || task.deadline;
-  task.recurring = { ...rec, nextDue: advanceDate(base, rec.frequency, rec.interval || 1) };
-  task.status = 'new';
-  task.doneAt = null;
-  task.subtasks = (task.subtasks || []).map(s => ({ ...s, status: 'new', doneAt: null }));
-  await setDoc(doc(db, 'tasks', task.id), task);
+  if (task.recurring) {
+    // Viewing the template: advance nextDue to skip this occurrence
+    const rec = task.recurring;
+    const base = rec.nextDue || task.deadline || todayStr();
+    task.recurring = { ...rec, nextDue: advanceDate(base, rec.frequency, rec.interval || 1) };
+    task.status = 'new';
+    task.doneAt = null;
+    task.subtasks = (task.subtasks || []).map(s => ({ ...s, status: 'new', doneAt: null }));
+    await setDoc(doc(db, 'tasks', task.id), task);
+  } else {
+    // Viewing an instance: just delete this doc, template keeps going
+    await deleteDoc(doc(db, 'tasks', task.id));
+  }
   window.location.href = 'index.html';
 }
 
-// Delete the whole series — removing the template stops future occurrences
+// Delete the whole series — template + all existing instances
 window.deleteAllOccurrences = async function() {
-  await deleteDoc(doc(db, 'tasks', task.id));
+  const templateId = task.recurringTemplateId || task.id;
+  // Delete all instances that reference this template
+  const q = query(collection(db, 'tasks'), where('recurringTemplateId', '==', templateId));
+  const snap = await getDocs(q);
+  await Promise.all(snap.docs.map(d => deleteDoc(d.ref)));
+  // Delete the template itself (may differ from current task if viewing an instance)
+  await deleteDoc(doc(db, 'tasks', templateId));
+  // If current task is a different doc (an instance), it was already deleted above
+  if (task.id !== templateId && !snap.docs.find(d => d.id === task.id)) {
+    await deleteDoc(doc(db, 'tasks', task.id));
+  }
   window.location.href = 'index.html';
 }
 

@@ -448,7 +448,7 @@ function showBadge(id) {
   setTimeout(() => el.classList.remove('show'), 2000);
 }
 
-function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 function toast(msg) {
   const t = document.getElementById('toast');

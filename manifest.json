@@ -1,12 +1,12 @@
 {
-  "name": "Twin — Женская Эффективность",
+  "name": "Twin — Personal AI Task Manager",
   "short_name": "Twin",
   "description": "AI-powered personal task manager",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
-  "background_color": "#1a1a2e",
-  "theme_color": "#6b5ce7",
+  "background_color": "#3d5a7a",
+  "theme_color": "#3d5a7a",
   "orientation": "portrait-primary",
   "icons": [
     {

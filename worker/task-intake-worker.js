@@ -19,7 +19,9 @@
  *   FIREBASE_PRIVATE_KEY     (full PEM)
  *   ALLOWED_SENDERS          (comma-separated emails for /email)
  *   POSTMARK_WEBHOOK_TOKEN   (optional)
- *   SLACK_SIGNING_SECRET     (optional)
+ *   SLACK_SIGNING_SECRET     (optional but recommended — verifies requests really come from Slack)
+ *   SLACK_CHANNEL_ID         (optional — restrict Events API intake to one channel)
+ *   TEST_TOKEN               (optional — required as {"token": "..."} body field on /test when set)
  *   VAPID_PUBLIC_KEY         (base64url EC P-256 uncompressed point)
  *   VAPID_PRIVATE_KEY        (base64url PKCS8 EC P-256 private key)
  *   VAPID_SUBJECT            (mailto: contact, optional)
@@ -64,10 +66,15 @@ async function handleAI(request, env) {
 }
 
 function isAllowedOrigin(origin) {
-  return !origin ||
-    origin.includes('localhost') ||
-    origin.includes('127.0.0.1') ||
-    origin === 'https://natalyatsarapaeva-tech.github.io';
+  // Origin is always present on cross-origin browser POSTs; requiring it blocks
+  // headless abuse of the OpenAI key proxy, and hostname parsing prevents the
+  // substring bypass (e.g. https://evil-localhost.example).
+  if (!origin) return false;
+  try {
+    const host = new URL(origin).hostname;
+    return host === 'localhost' || host === '127.0.0.1' ||
+      origin === 'https://natalyatsarapaeva-tech.github.io';
+  } catch (_) { return false; }
 }
 
 // ── /email — Postmark inbound ───────────────────────────────────────────────
@@ -91,6 +98,11 @@ async function handleEmail(request, env) {
 async function handleSlack(request, env, ctx) {
   const raw = await request.text();
 
+  // Verify the request actually comes from Slack (HMAC v0 signature).
+  if (!(await verifySlackSignature(request, raw, env))) {
+    return new Response('invalid signature', { status: 401 });
+  }
+
   // Events API sends JSON; slash commands send form-urlencoded.
   let json = null;
   try { json = JSON.parse(raw); } catch (_) {}
@@ -108,20 +120,29 @@ async function handleSlack(request, env, ctx) {
 
       const event = json.event || {};
       const text = (event.text || '').trim();
-      // Skip bot's own messages, edits/joins/etc., and empty text (prevents loops)
-      const skip = event.bot_id || event.subtype || event.type !== 'message' || !text;
+      // Skip bot's own messages, edits/joins/etc., and empty text (prevents loops).
+      // If SLACK_CHANNEL_ID is set, only that channel feeds the task intake —
+      // otherwise every channel the bot is in turns messages into tasks.
+      const skip = event.bot_id || event.subtype || event.type !== 'message' || !text ||
+        (env.SLACK_CHANNEL_ID && event.channel !== env.SLACK_CHANNEL_ID);
       if (!skip) {
         ctx.waitUntil((async () => {
-          const task = await parseTask(text, env);
-          task.source = 'slack';
-          await saveTask(task, env);
-          // Confirm back in the channel if a bot token is configured (optional)
+          let reply;
+          try {
+            const task = await parseTask(text, env);
+            task.source = 'slack';
+            await saveTask(task, env);
+            reply = `✅ Task created: *${task.title}*`;
+          } catch (e) {
+            reply = `⚠️ Could not create task: ${e.message}`;
+          }
+          // Confirm (or report failure) in a thread if a bot token is configured
           if (env.SLACK_BOT_TOKEN && event.channel) {
             await fetch('https://slack.com/api/chat.postMessage', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json; charset=utf-8', 'Authorization': `Bearer ${env.SLACK_BOT_TOKEN}` },
-              body: JSON.stringify({ channel: event.channel, text: `✅ Task created: *${task.title}*`, thread_ts: event.ts })
-            });
+              body: JSON.stringify({ channel: event.channel, text: reply, thread_ts: event.ts })
+            }).catch(() => {});
           }
         })());
       }
@@ -133,30 +154,64 @@ async function handleSlack(request, env, ctx) {
 
   // 3) Fallback: slash command (application/x-www-form-urlencoded)
   const params = new URLSearchParams(raw);
-  const text = params.get('text') || '';
+  const text = (params.get('text') || '').trim();
   const responseUrl = params.get('response_url');
+  if (!text) {
+    return new Response(
+      JSON.stringify({ response_type: 'ephemeral', text: 'Usage: `/task <what needs to be done>` — e.g. `/task pay internet bill by Friday`' }),
+      { headers: { 'Content-Type': 'application/json' } }
+    );
+  }
   const ackResponse = new Response(
     JSON.stringify({ response_type: 'ephemeral', text: '⏳ Creating task…' }),
     { headers: { 'Content-Type': 'application/json' } }
   );
   ctx.waitUntil((async () => {
-    const task = await parseTask(text, env);
-    task.source = 'slack';
-    await saveTask(task, env);
+    let reply;
+    try {
+      const task = await parseTask(text, env);
+      task.source = 'slack';
+      await saveTask(task, env);
+      reply = { response_type: 'in_channel', text: `✅ Task created: *${task.title}*` };
+    } catch (e) {
+      reply = { response_type: 'ephemeral', text: `⚠️ Could not create task: ${e.message}` };
+    }
     if (responseUrl) {
       await fetch(responseUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ response_type: 'in_channel', text: `✅ Task created: *${task.title}*` })
-      });
+        body: JSON.stringify(reply)
+      }).catch(() => {});
     }
   })());
   return ackResponse;
 }
 
+// Slack request signing: v0=HMAC_SHA256(signing_secret, "v0:{ts}:{body}")
+async function verifySlackSignature(request, raw, env) {
+  if (!env.SLACK_SIGNING_SECRET) return true; // not configured — accept (personal setup)
+  const ts  = request.headers.get('X-Slack-Request-Timestamp') || '';
+  const sig = request.headers.get('X-Slack-Signature') || '';
+  if (!ts || !sig) return false;
+  if (Math.abs(Date.now() / 1000 - Number(ts)) > 300) return false; // replay guard
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(env.SLACK_SIGNING_SECRET),
+    { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`v0:${ts}:${raw}`)));
+  const expected = 'v0=' + [...mac].map(b => b.toString(16).padStart(2, '0')).join('');
+  if (expected.length !== sig.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ sig.charCodeAt(i);
+  return diff === 0;
+}
+
 // ── /test ───────────────────────────────────────────────────────────────────
 async function handleTest(request, env) {
   const body = await request.json().catch(() => ({}));
+  if (env.TEST_TOKEN && body.token !== env.TEST_TOKEN) {
+    return new Response('Unauthorized', { status: 401 });
+  }
   const text = body.text || 'Test task from worker';
   const task = await parseTask(text, env);
   task.source = 'test';
@@ -465,11 +520,27 @@ Text: ${text}`;
     body: JSON.stringify({ model: 'gpt-4o', max_tokens: 300, temperature: 0, messages: [{ role: 'user', content: prompt }] })
   });
   const data = await res.json();
+  if (!res.ok || !data.choices?.length) {
+    throw new Error(data.error?.message || `OpenAI error (${res.status})`);
+  }
   const raw = data.choices[0].message.content.trim()
     .replace(/^```json\s*/, '').replace(/^```\s*/, '').replace(/\s*```$/, '');
   const task = JSON.parse(raw);
   const id = `task-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-  return { id, ...task, subtasks: [], notes: '', createdAt: new Date().toISOString() };
+  // Sanitize model output so it always matches the app's task schema
+  const tags = (Array.isArray(task.tags) ? task.tags : []).filter(t => tagIds.includes(t));
+  return {
+    id,
+    title: String(task.title || text).slice(0, 200),
+    description: String(task.description || ''),
+    priority: ['high', 'med', 'low'].includes(task.priority) ? task.priority : 'none',
+    deadline: /^\d{4}-\d{2}-\d{2}$/.test(task.deadline || '') ? task.deadline : null,
+    nextAction: null,
+    tags,
+    primaryTag: tags[0] || null,
+    status: 'new',
+    subtasks: [], notes: '', createdAt: new Date().toISOString()
+  };
 }
 
 // ── Firestore REST save ─────────────────────────────────────────────────────
@@ -478,17 +549,18 @@ async function saveTask(task, env) {
   const url = `https://firestore.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/databases/(default)/documents/tasks/${task.id}`;
   const fields = {};
   for (const [k, v] of Object.entries(task)) fields[k] = firestoreValue(v);
-  await fetch(url, {
+  const res = await fetch(url, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
     body: JSON.stringify({ fields })
   });
+  if (!res.ok) throw new Error(`Firestore write failed (${res.status})`);
 }
 
 function firestoreValue(v) {
   if (v === null || v === undefined) return { nullValue: null };
   if (typeof v === 'boolean') return { booleanValue: v };
-  if (typeof v === 'number')  return { integerValue: v };
+  if (typeof v === 'number')  return Number.isInteger(v) ? { integerValue: v } : { doubleValue: v };
   if (typeof v === 'string')  return { stringValue: v };
   if (Array.isArray(v))       return { arrayValue: { values: v.map(firestoreValue) } };
   if (typeof v === 'object') {

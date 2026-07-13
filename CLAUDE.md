@@ -182,12 +182,19 @@ Shared utility — included via `<script src="voice.js">` in all HTML files.
 
 -----
 
-## Recurring tasks
+## Recurring tasks (rolling model)
 
-- Template task has `recurring: {frequency, interval, nextDue}`
-- Check runs on `index.html` load (`checkRecurringTasks()`)
-- If `nextDue ≤ today`: creates new instance (no `recurring` field), advances template's `nextDue`
-- Quick "✓ Done" on recurring task: archives current occurrence, creates next instance immediately
+- Each series is ONE live document carrying `recurring: {frequency, interval, nextDue}`
+- Invariant: `deadline === recurring.nextDue` (both point at the current/next occurrence)
+- Completing (✓ on card, status→done on task page, or mind map ✓): writes an archived
+  done COPY (new id, `recurring: null`, `doneAt` set) and rolls the same document
+  forward — `deadline`/`nextDue` advance to the first strictly-future occurrence
+  (`nextOccurrence()` catches up over missed periods), status→new, subtasks reset
+- Delete on a recurring task asks: "just this occurrence" (roll forward, no archive)
+  vs "all occurrences" (delete the document — series stops; archived copies stay)
+- `checkRecurringTasks()` on index load only migrates legacy data (old
+  template/instance model): revives done-archived templates as rolling tasks and
+  aligns stale `deadline` with `nextDue`
 - Recurring badge shown on card: `♻ weekly`
 - Repeat field available in: add-task.html form, task.html edit modal
 
@@ -221,7 +228,9 @@ Shared utility — included via `<script src="voice.js">` in all HTML files.
 - `FIREBASE_PRIVATE_KEY` = full PEM private key
 - `ALLOWED_SENDERS` = comma-separated allowed email addresses
 - `POSTMARK_WEBHOOK_TOKEN` = optional verification token
-- `SLACK_SIGNING_SECRET` = optional
+- `SLACK_SIGNING_SECRET` = optional but recommended — enables Slack request signature verification
+- `SLACK_CHANNEL_ID` = optional — restricts Slack Events API intake to one channel
+- `TEST_TOKEN` = optional — required as `{"token": "..."}` in `/test` body when set
 
 **Deploy:** `wrangler deploy` from `worker/` directory.
 
@@ -339,5 +348,5 @@ Shared utility — included via `<script src="voice.js">` in all HTML files.
 1. **Firebase `setDoc` vs `updateDoc`** — we use `setDoc` for full replacement; `updateDoc` only for specific field patches
 1. **Tag task summary** updates after save — if OpenAI key not set, it silently skips (no error shown)
 1. **Monthly suggestions** check `localStorage('monthlyGenerated')` — clear it to regenerate in same month
-1. **Recurring tasks**: template keeps `recurring` field, instances have `recurring: null`
+1. **Recurring tasks**: rolling model — the live series doc keeps `recurring` (with `deadline === nextDue`); archived done copies have `recurring: null`
 1. **Mind map** uses `primaryTag` only — tasks without `primaryTag` fall back to `tags[0]`

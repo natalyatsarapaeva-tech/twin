@@ -435,7 +435,7 @@ async function load() {
 }
 async function init() { await loadTags(); load(); }
 init().catch(e => {
-  document.getElementById('loading').innerHTML = `<div style="color:#c8dcf0;padding:24px;text-align:center">Ошибка: ${e.message}</div>`;
+  document.getElementById('loading').innerHTML = `<div style="color:#c8dcf0;padding:24px;text-align:center">Error: ${e.message}</div>`;
 });
 
 // ── RENDER ──
@@ -564,6 +564,28 @@ function renderSubtasks() {
 
 // ── STATUS ──
 window.setStatus = async function(status, el) {
+  if (status === 'done' && task.status !== 'done' && task.recurring) {
+    // Rolling model: archive a done copy of this occurrence,
+    // then roll this same task forward to the next date.
+    const rec = task.recurring;
+    const base = rec.nextDue || task.deadline || todayStr();
+    const next = nextOccurrence(base, rec.frequency, rec.interval || 1);
+    const archiveId = 'task-' + Date.now() + '-' + Math.random().toString(36).slice(2,5);
+    const archived = {...task, id: archiveId, status: 'done',
+      doneAt: new Date().toISOString(), recurring: null};
+    await setDoc(doc(db,'tasks',archiveId), archived);
+    task.status = 'new';
+    task.doneAt = null;
+    task.deadline = next;
+    task.nextAction = null;
+    task.subtasks = (task.subtasks||[]).map(s => ({...s, status:'new'}));
+    task.recurring = {...rec, nextDue: next};
+    await setDoc(doc(db,'tasks',task.id), task);
+    render();
+    if (task.tags && task.tags.length) triggerTagSummaryUpdate(task.tags);
+    toast(`✓ Done — next occurrence: ${fmtDate(next)}`);
+    return;
+  }
   if (status === 'done' && task.status !== 'done') {
     task.doneAt = new Date().toISOString();
   }
@@ -755,12 +777,15 @@ window.saveEditModal = async function() {
   const repFreq = document.getElementById('edit-repeat')?.value || '';
   const repInt = parseInt(document.getElementById('edit-repeat-interval')?.value||'1');
   if (repFreq) {
+    // Rolling model invariant: deadline and nextDue point at the same (next) occurrence
+    const due = task.deadline || task.recurring?.nextDue || todayStr();
     task.recurring = {
       frequency: repFreq,
       interval: repInt,
-      nextDue: task.recurring?.nextDue || task.deadline || null,
-      endDate: null
+      nextDue: due,
+      endDate: task.recurring?.endDate || null
     };
+    if (!task.deadline) task.deadline = due;
   } else {
     task.recurring = null;
   }
@@ -821,14 +846,14 @@ function buildSystemPromptTask(siblingTasks) {
   const today = todayStr();
   const mainDump = `=== CURRENT TASK ===
 ID: ${task.id}
-Название: ${task.title}
+Title: ${task.title}
 Status: ${task.status||'new'} | Priority: ${task.priority||'none'} | Deadline: ${task.deadline||'none'} | Next action: ${task.nextAction||'none'}
-Теги: ${(task.tags||[]).join(', ')||'нет'}
-Notes: ${task.notes||'нет'}
+Tags: ${(task.tags||[]).join(', ')||'none'}
+Notes: ${task.notes||'none'}
 Subtasks (${task.subtasks.length}):
 ${task.subtasks.map((s,i) =>
-  `  ${i}. [${s.status||'new'}] ${s.title}${s.note?' — '+s.note:''}${s.dueDate?' | срок: '+s.dueDate:''}${s.assigned?' | @'+s.assigned:''}`
-).join('\n') || '  нет'}`;
+  `  ${i}. [${s.status||'new'}] ${s.title}${s.note?' — '+s.note:''}${s.dueDate?' | due: '+s.dueDate:''}${s.assigned?' | @'+s.assigned:''}`
+).join('\n') || '  none'}`;
 
   const siblingDump = siblingTasks.length
     ? `\n=== RELATED TASKS (same tags) ===\n` + siblingTasks.map(t => buildTaskDump(t)).join('\n')
@@ -1018,9 +1043,9 @@ async function aiParseSubtasks(text) {
     const res = await callGPT(
       buildSystemPromptTask(siblings),
       `The user sent text for task "${task.title}". Extract the list of subtasks.
-Текст:\n\n${text}\n\n
-Ответь ТОЛЬКО JSON-массивом без пояснений:
-[{"title":"...","note":"...","dueDate":"YYYY-MM-DD или null","status":"new","assigned":""}]`
+Text:\n\n${text}\n\n
+Reply with ONLY a JSON array, no explanations:
+[{"title":"...","note":"...","dueDate":"YYYY-MM-DD or null","status":"new","assigned":""}]`
     );
     const clean = res.replace(/^```json\s*/m,'').replace(/^```\s*/m,'').replace(/\s*```$/m,'').trim();
     const arr = JSON.parse(clean);
@@ -1189,15 +1214,17 @@ window.closeRecDeleteModal = function() {
   document.getElementById('rec-del-overlay').style.display = 'none';
 }
 
-// Roll this recurring task forward to its next occurrence (series continues)
+// Skip this occurrence: roll the task forward without archiving a done copy
 window.deleteThisOccurrence = async function() {
   const rec = task.recurring;
   const base = rec.nextDue || task.deadline || todayStr();
-  task.deadline = rec.nextDue || task.deadline;
-  task.recurring = { ...rec, nextDue: advanceDate(base, rec.frequency, rec.interval || 1) };
+  const next = nextOccurrence(base, rec.frequency, rec.interval || 1);
+  task.deadline = next;
+  task.nextAction = null;
+  task.recurring = { ...rec, nextDue: next };
   task.status = 'new';
   task.doneAt = null;
-  task.subtasks = (task.subtasks || []).map(s => ({ ...s, status: 'new', doneAt: null }));
+  task.subtasks = (task.subtasks || []).map(s => ({ ...s, status: 'new' }));
   await setDoc(doc(db, 'tasks', task.id), task);
   window.location.href = 'index.html';
 }
@@ -1219,11 +1246,23 @@ function advanceDate(dateStr, frequency, interval) {
   return d.toISOString().split('T')[0];
 }
 
+// Next occurrence strictly in the future — catches up when occurrences were missed
+function nextOccurrence(baseStr, frequency, interval) {
+  const today = todayStr();
+  let next = advanceDate(baseStr, frequency, interval);
+  let guard = 0;
+  while (next <= today && guard++ < 1000) next = advanceDate(next, frequency, interval);
+  return next;
+}
+
 // ── SAVE ──
 async function save() {
-  // Always re-derive nextAction from earliest pending subtask due date
-  const derived = deriveNextAction(task);
-  if (derived) task.nextAction = derived;
+  // Fill nextAction from the earliest pending subtask due date only when the
+  // user hasn't set one manually — never overwrite an explicit choice.
+  if (!task.nextAction) {
+    const derived = deriveNextAction(task);
+    if (derived) task.nextAction = derived;
+  }
   await updateDoc(doc(db, 'tasks', task.id), task);
   render();
 }
@@ -1276,7 +1315,7 @@ function fmtDate(d) {
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return `${parseInt(day)} ${months[parseInt(m)-1]}`;
 }
-function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');

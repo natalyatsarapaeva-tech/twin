@@ -116,7 +116,7 @@
   <div class="section">
     <div class="section-title">📋 Main info</div>
 
-    <label class="field-label">Название дела *</label>
+    <label class="field-label">Task title *</label>
     <input class="field-input" id="f-title" placeholder="What needs to be done?"/>
 
     <label class="field-label">Description / context</label>
@@ -363,16 +363,17 @@ window.saveTask = async function() {
   const repeatInterval = parseInt(document.getElementById('f-repeat-interval')?.value||'1');
   const deadline = document.getElementById('f-due').value || null;
   const nextAction = document.getElementById('f-next-action').value || null;
+  // Rolling model: a recurring task always has deadline === recurring.nextDue
   const recurring = repeatFreq ? {
     frequency: repeatFreq,
     interval: repeatInterval,
-    nextDue: deadline || null,
+    nextDue: deadline || new Date().toISOString().split('T')[0],
     endDate: null
   } : null;
   const task = {
     id, title,
     description: document.getElementById('f-desc').value.trim(),
-    deadline,
+    deadline: deadline || (recurring ? recurring.nextDue : null),
     nextAction,
     priority: document.getElementById('f-priority').value,
     tags: [...selectedTags],
@@ -403,7 +404,7 @@ window.analyzeBatch = async function() {
   if (!text) { toast('Paste your task list'); return; }
 
   const btn = document.getElementById('batch-btn');
-  btn.disabled = true; btn.textContent = '⏳ Анализирую…';
+  btn.disabled = true; btn.textContent = '⏳ Analyzing…';
 
   const systemPrompt = `You are a task management assistant. Parse the task list and return ONLY a valid JSON array, no explanations or markdown.
 
@@ -411,8 +412,8 @@ For each task:
 {
   "title": "task title in English",
   "tags": ["tag1", "tag2"],
-  "deadline": "YYYY-MM-DD или null",
-  "nextAction": "YYYY-MM-DD или null",
+  "deadline": "YYYY-MM-DD or null",
+  "nextAction": "YYYY-MM-DD or null",
   "priority": "high|med|low|none",
   "status": "new"
 }
@@ -424,7 +425,7 @@ Auto-detect tags from context. Translate any non-English input to English. Today
   try {
     const data = await gpt({model:'gpt-4o',max_tokens:2000,messages:[
       {role:'system',content:systemPrompt},
-      {role:'user',content:'Список дел:\n\n'+text}
+      {role:'user',content:'Task list:\n\n'+text}
     ]});
     const raw = data.choices[0].message.content.trim().replace(/^```json\s*/,'').replace(/^```\s*/,'').replace(/\s*```$/,'');
     batchResults = JSON.parse(raw);
@@ -439,7 +440,7 @@ Auto-detect tags from context. Translate any non-English input to English. Today
 function renderBatchResults() {
   const wrap = document.getElementById('ai-results-wrap');
   wrap.classList.add('open');
-  wrap.innerHTML = `<div style="font-size:12px;color:var(--text-soft);margin-bottom:8px;">GPT нашёл ${batchResults.length} дел. Выбери что сохранить:</div>` +
+  wrap.innerHTML = `<div style="font-size:12px;color:var(--text-soft);margin-bottom:8px;">AI found ${batchResults.length} task${batchResults.length===1?'':'s'}. Choose which to save:</div>` +
     batchResults.map((t, i) => {
       const tags = (t.tags||[]).map(tag => {
         const m = TAG_META[tag];
@@ -457,7 +458,7 @@ function renderBatchResults() {
       </div>`;
     }).join('') +
     `<div class="batch-actions">
-      <button class="batch-select-all" onclick="toggleSelectAll()">Выбрать все</button>
+      <button class="batch-select-all" onclick="toggleSelectAll()">Select all / none</button>
       <button class="batch-save-btn" onclick="saveBatch()">💾 Save selected</button>
     </div>`;
 }
@@ -591,7 +592,7 @@ function initVoice() {
 }
 document.addEventListener('DOMContentLoaded', initVoice);
 
-function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function toast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg; t.classList.add('show');

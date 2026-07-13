@@ -274,7 +274,7 @@
   </div>
 
   <div class="sort-row">
-    <span class="sort-label" id="sort-label">By due date ↑</span>
+    <span class="sort-label" id="sort-label">By next action ↑</span>
     <div style="display:flex;gap:10px;align-items:center;">
       <button class="sort-btn" id="monthly-btn" onclick="openMonthlySuggestions()" style="color:var(--lavender);">✨ This month</button>
       <button class="sort-btn" onclick="toggleSort()">↕ Sort</button>
@@ -484,7 +484,7 @@ init();
 function updateHeaderStats() {
   const today = todayStr();
   const overdue = allTasks.filter(t => t.status !== 'done' && t.deadline && t.deadline < today).length;
-  const todayCount = allTasks.filter(t => t.status !== 'done' && (t.nextAction === today || (!t.nextAction && t.deadline === today))).length;
+  const todayCount = allTasks.filter(t => isForToday(t, today)).length;
   const doneCount = allTasks.filter(t => t.status === 'done').length;
   const total = allTasks.filter(t => t.status !== 'done').length;
 
@@ -494,6 +494,14 @@ function updateHeaderStats() {
   stats.innerHTML += `<button class="stat-chip overdue clickable${overdue?'':' muted'}" data-filter="overdue" onclick="filterCards('overdue',null)">🔴 ${overdue} overdue</button>`;
   stats.innerHTML += `<button class="stat-chip clickable${todayCount?'':' muted'}" data-filter="today" onclick="filterCards('today',null)">⚡ ${todayCount} today</button>`;
   stats.innerHTML += `<button class="stat-chip clickable" data-filter="done" onclick="filterCards('done',null)">✅ ${doneCount} done</button>`;
+}
+
+// "Today" = anything due for action today or earlier (an overdue planned task
+// must not silently drop out of the Today view — that's how things get lost)
+function isForToday(t, today) {
+  if (t.status === 'done') return false;
+  if (t.nextAction) return t.nextAction <= today;
+  return !!t.deadline && t.deadline <= today;
 }
 
 // ── FILTER ──
@@ -506,12 +514,11 @@ function getFiltered() {
       // Default: active tasks + tasks completed today
       list = list.filter(t =>
         t.status !== 'done' ||
-        (t.doneAt && t.doneAt.startsWith(today)) ||
-        (t.status === 'done' && t.deadline === today)
+        (t.doneAt && t.doneAt.startsWith(today))
       );
       break;
     case 'overdue':    list = list.filter(t => t.status !== 'done' && t.deadline && t.deadline < today); break;
-    case 'today':      list = list.filter(t => t.status !== 'done' && (t.nextAction === today || (!t.nextAction && t.deadline === today))); break;
+    case 'today':      list = list.filter(t => isForToday(t, today)); break;
     case 'this-week': { const nw = new Date(); nw.setDate(nw.getDate()+7); const nwStr=nw.toISOString().split('T')[0];
                         list = list.filter(t => { const d = t.nextAction || t.deadline; return t.status !== 'done' && d && d >= today && d <= nwStr; }); break; }
     case 'no-date':    list = list.filter(t => t.status !== 'done' && !t.deadline); break;
@@ -551,7 +558,7 @@ window.renderCards = function() {
   const list = getFiltered();
 
   if (!list.length) {
-    grid.innerHTML = '<div class="no-results">📋 Ничего не найдено</div>';
+    grid.innerHTML = '<div class="no-results">📋 Nothing found</div>';
     return;
   }
 
@@ -599,7 +606,7 @@ window.renderCards = function() {
       </div>
       <div class="card-right">
         ${!done ? `<div class="card-quick-actions" style="flex-direction:column;align-items:flex-end;margin-bottom:4px;">
-          <button class="card-quick-btn cqb-today" onclick="event.stopPropagation();quickSetToday('${t.id}',this)" style="margin-bottom:4px;" title="Set due today">⚡</button>
+          <button class="card-quick-btn cqb-today" onclick="event.stopPropagation();quickSetToday('${t.id}',this)" style="margin-bottom:4px;" title="Plan for today">⚡</button>
           <button class="card-quick-btn cqb-done" onclick="event.stopPropagation();quickMarkDone('${t.id}',this)" title="Mark done">✓</button>
         </div>` : ''}
         <div class="card-status-dot ${statusDotClass}" style="margin-top:4px;"></div>
@@ -649,13 +656,15 @@ function saveFilterForNewTask() {
 window.quickSetToday = async function(taskId, btn) {
   const t = allTasks.find(t => t.id === taskId);
   if (!t) return;
-  t.deadline = todayStr();
+  // "Work on it today" — plan the next action; the hard deadline stays untouched
+  t.nextAction = todayStr();
   btn.textContent = '✓ Set';
   btn.style.background = 'var(--lav-pale)';
   try {
     await setDoc(doc(db,'tasks',taskId), t);
+    updateHeaderStats();
     setTimeout(() => renderCards(), 600);
-  } catch(e) { btn.textContent = '⚡ Today'; }
+  } catch(e) { btn.textContent = '⚡'; }
 }
 
 window.quickMarkDone = async function(taskId, btn) {
@@ -667,26 +676,23 @@ window.quickMarkDone = async function(taskId, btn) {
 
   try {
     if (t.recurring) {
-      // Recurring template: create next instance, reset this one's status+date
+      // Rolling model: archive a COPY of this occurrence as a plain done task,
+      // then roll the series task itself forward to the next date.
+      // One live document per series — no template/instance duplicates.
       const rec = t.recurring;
-      const nextDue = advanceDate(rec.nextDue || t.deadline || todayStr(), rec.frequency, rec.interval || 1);
-      const newId = 'task-' + Date.now() + '-' + Math.random().toString(36).slice(2,5);
-      const newTask = {
-        ...t, id: newId, status: 'new',
-        deadline: rec.nextDue || t.deadline,
-        doneAt: null, notes: '',
-        subtasks: (t.subtasks||[]).map(s => ({...s, status:'new', doneAt:null})),
-        createdAt: new Date().toISOString(),
-        recurring: null
-      };
-      // Archive THIS occurrence
-      const archived = {...t, status:'done', doneAt: new Date().toISOString(),
-        recurring: {...rec, nextDue: nextDue}};
-      await setDoc(doc(db,'tasks',newId), newTask);
-      await setDoc(doc(db,'tasks',taskId), archived);
-      allTasks.push(newTask);
+      const nextDue = nextOccurrence(rec.nextDue || t.deadline || todayStr(), rec.frequency, rec.interval || 1);
+      const archiveId = 'task-' + Date.now() + '-' + Math.random().toString(36).slice(2,5);
+      const archived = {...t, id: archiveId, status: 'done',
+        doneAt: new Date().toISOString(), recurring: null};
+      const rolled = {...t, status: 'new', doneAt: null,
+        deadline: nextDue, nextAction: null,
+        subtasks: (t.subtasks||[]).map(s => ({...s, status:'new'})),
+        recurring: {...rec, nextDue}};
+      await setDoc(doc(db,'tasks',archiveId), archived);
+      await setDoc(doc(db,'tasks',taskId), rolled);
+      allTasks.push(archived);
       const idx = allTasks.findIndex(x => x.id === taskId);
-      if (idx >= 0) allTasks[idx] = archived;
+      if (idx >= 0) allTasks[idx] = rolled;
     } else {
       t.status = 'done';
       t.doneAt = new Date().toISOString();
@@ -951,7 +957,7 @@ Return ONLY JSON:
   "isGeneral": true/false
 }
 
-Tags: dev,strategy,analytics,clients,leads,ux,kids,health,urgent,ideas,money,home,travel,rest,swedish
+Tags: ${[...WORK_TAGS,...PERSONAL_TAGS].join(',')}
 isGeneral=true if the question is intentionally broad (e.g. "what should I do today?")`;
 
   try {
@@ -996,13 +1002,18 @@ isGeneral=true if the question is intentionally broad (e.g. "what should I do to
 }
 
 // ── AUTO CHAT SUMMARY ──
+let chatSummarisedCount = 0; // messages already covered by a saved summary
 async function autoSummariseChat() {
-  if (chatHistory.length < 6) return;
+  // Only summarise the part of the conversation not summarised before,
+  // otherwise every chat close re-appends a summary of the whole history.
+  const fresh = chatHistory.slice(chatSummarisedCount);
+  if (fresh.filter(m => m.role === 'user').length < 3) return;
 
-  const historyText = chatHistory
+  const historyText = fresh
     .filter(m => typeof m.content === 'string') // skip image messages
     .map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content}`)
     .join('\n');
+  chatSummarisedCount = chatHistory.length;
 
   try {
     const data = await gpt({model:'gpt-4o',max_tokens:200,temperature:0.3,messages:[
@@ -1399,36 +1410,44 @@ function removeBubble(id) {
 }
 
 // ══ RECURRING TASKS ══
+// Rolling model: each series is ONE live document whose deadline == recurring.nextDue.
+// Completing it archives a done copy and rolls the same document forward.
+// This check migrates data written by the old template/instance model.
 async function checkRecurringTasks() {
   const today = todayStr();
-  const toCreate = allTasks.filter(t => t.recurring && t.recurring.nextDue && t.recurring.nextDue <= today);
-  for (const template of toCreate) {
-    // Create new task instance
-    const newId = 'task-' + Date.now() + '-' + Math.random().toString(36).slice(2,5);
-    const newTask = {
-      ...template,
-      id: newId,
-      status: 'new',
-      deadline: template.recurring.nextDue,
-      doneAt: null,
-      notes: '',
-      subtasks: (template.subtasks||[]).map(s => ({...s, status:'new', doneAt:null})),
-      createdAt: new Date().toISOString(),
-      recurring: null // instance has no recurring — only template does
-    };
-    // Advance nextDue on template
-    const rec = template.recurring;
-    const next = advanceDate(rec.nextDue, rec.frequency, rec.interval || 1);
-    const updatedTemplate = {...template, recurring: {...rec, nextDue: next}};
+  let changed = false;
+  for (const t of allTasks.filter(t => t.recurring)) {
+    const rec = t.recurring;
     try {
-      await setDoc(doc(db,'tasks',newId), newTask);
-      await setDoc(doc(db,'tasks',template.id), updatedTemplate);
-      allTasks.push(newTask);
-      const idx = allTasks.findIndex(t=>t.id===template.id);
-      if (idx>=0) allTasks[idx] = updatedTemplate;
+      if (t.status === 'done') {
+        // Legacy: an archived done task still carrying the series. Hand the series
+        // to a fresh rolling task, and strip recurring from the archive.
+        const due = rec.nextDue || today;
+        const newId = 'task-' + Date.now() + '-' + Math.random().toString(36).slice(2,5);
+        const revived = {...t, id: newId, status: 'new', doneAt: null,
+          deadline: due, nextAction: null, notes: '',
+          subtasks: (t.subtasks||[]).map(s => ({...s, status:'new'})),
+          createdAt: new Date().toISOString(),
+          recurring: {...rec, nextDue: due}};
+        const archived = {...t, recurring: null};
+        await setDoc(doc(db,'tasks',newId), revived);
+        await setDoc(doc(db,'tasks',t.id), archived);
+        allTasks.push(revived);
+        const idx = allTasks.findIndex(x => x.id === t.id);
+        if (idx >= 0) allTasks[idx] = archived;
+        changed = true;
+      } else if (rec.nextDue && (t.deadline || '') !== rec.nextDue) {
+        // Legacy active template whose occurrence was spawned separately:
+        // align the task itself with the next occurrence date.
+        const synced = {...t, deadline: rec.nextDue};
+        await setDoc(doc(db,'tasks',t.id), synced);
+        const idx = allTasks.findIndex(x => x.id === t.id);
+        if (idx >= 0) allTasks[idx] = synced;
+        changed = true;
+      }
     } catch(e) { console.error('Recurring task error:', e); }
   }
-  if (toCreate.length) { renderCards(); updateHeaderStats(); }
+  if (changed) { renderCards(); updateHeaderStats(); }
 }
 
 function advanceDate(dateStr, frequency, interval) {
@@ -1440,6 +1459,15 @@ function advanceDate(dateStr, frequency, interval) {
     case 'yearly':  d.setFullYear(d.getFullYear() + interval); break;
   }
   return d.toISOString().split('T')[0];
+}
+
+// Next occurrence strictly in the future — catches up when occurrences were missed
+function nextOccurrence(baseStr, frequency, interval) {
+  const today = todayStr();
+  let next = advanceDate(baseStr, frequency, interval);
+  let guard = 0;
+  while (next <= today && guard++ < 1000) next = advanceDate(next, frequency, interval);
+  return next;
 }
 
 // ══ MONTHLY SUGGESTIONS ══
@@ -1568,7 +1596,7 @@ function fmtDate(d) {
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return `${parseInt(day)} ${months[parseInt(m)-1]}`;
 }
-function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // ══ NOTIFICATIONS ══
 const NOTIF_TYPES = [

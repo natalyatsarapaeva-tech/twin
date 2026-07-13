@@ -89,6 +89,20 @@
     .legend-item{display:flex;align-items:center;gap:5px;}
     .legend-dot{width:8px;height:8px;border-radius:50%;}
 
+    /* Detail-panel quick actions */
+    .detail-subtask.clickable{cursor:pointer;transition:background .15s;}
+    .detail-subtask.clickable:hover{background:var(--lav-pale);}
+    .detail-check{width:16px;height:16px;border-radius:5px;border:2px solid var(--border);background:var(--white);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;margin-top:1px;}
+    .detail-check.done{background:var(--green);border-color:var(--green);color:var(--white);}
+    .detail-done-btn{width:100%;padding:11px;border-radius:11px;background:var(--green);color:var(--white);border:none;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:14px;}
+    .detail-done-btn.reopen{background:var(--amber);}
+
+    /* Mobile: detail panel becomes a bottom sheet instead of squeezing the map */
+    @media (max-width:700px){
+      #detail-panel{position:fixed;left:0;right:0;bottom:0;top:auto;width:100%;max-height:65vh;border-left:none;border-top:1px solid var(--border);border-radius:18px 18px 0 0;box-shadow:0 -6px 24px var(--shadow);z-index:60;}
+      #detail-panel.collapsed{display:none;}
+    }
+
     /* LOADING */
     #loading{position:fixed;inset:0;background:var(--slate);display:flex;align-items:center;justify-content:center;z-index:999;}
     .loading-icon{font-size:48px;animation:pulse 1.4s ease infinite;color:var(--blue-pale);}
@@ -102,7 +116,11 @@
   <div class="top-bar">
     <button class="back-btn" onclick="window.location.href='index.html'">← Back</button>
     <div class="top-bar-title">🗺 Mind Map</div>
-    <div class="top-bar-sub" id="map-stats"></div>
+    <label style="margin-left:auto;display:flex;align-items:center;gap:5px;font-size:12px;color:var(--blue-pale);cursor:pointer;white-space:nowrap;">
+      <input type="checkbox" id="show-done-cb" onchange="toggleShowDone(this)" style="accent-color:var(--green);">
+      Show completed
+    </label>
+    <div class="top-bar-sub" id="map-stats" style="margin-left:12px;"></div>
   </div>
   <div class="main">
     <div id="map-panel">
@@ -179,11 +197,16 @@ async function loadTags() {
 }
 
 let allTasks = [];
+let showDone = false;
+
+window.toggleShowDone = function(cb) {
+  showDone = cb.checked;
+  renderMap();
+}
 
 async function load() {
   const snap = await getDocs(collection(db, 'tasks'));
   allTasks = snap.docs.map(d => ({id:d.id,...d.data()}));
-  document.getElementById('map-stats').textContent = allTasks.length + ' tasks';
   document.getElementById('loading').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
   renderMap();
@@ -197,13 +220,16 @@ function renderMap() {
   const root = document.getElementById('map-root');
   root.innerHTML = '';
   const today = todayStr();
+  const visibleTasks = showDone ? allTasks : allTasks.filter(t => t.status !== 'done');
+  document.getElementById('map-stats').textContent =
+    visibleTasks.length + (showDone ? ' tasks' : ' active tasks');
 
   // Group tasks by PRIMARY tag only (to avoid duplicates)
   // If no primaryTag set, use first tag as fallback
   const tagGroups = {};
   [...WORK_TAGS, ...PERSONAL_TAGS].forEach(tag => tagGroups[tag] = []);
   const untagged = [];
-  allTasks.forEach(t => {
+  visibleTasks.forEach(t => {
     const tags = t.tags || [];
     if (!tags.length) { untagged.push(t); return; }
     // Use primaryTag if set and valid, else first tag
@@ -280,7 +306,7 @@ function makeTagBranch(tag, tasks, today) {
   addBtn.className = 'add-task-node';
   addBtn.innerHTML = '+ Add task';
   addBtn.onclick = () => {
-    localStorage.setItem('presetTag', tag);
+    localStorage.setItem('newTaskPresetTag', tag);
     window.location.href = 'add-task.html';
   };
   branch.appendChild(addBtn);
@@ -321,7 +347,7 @@ function makeTaskNode(task, today) {
     ${dueHtml}
     ${subCount ? `<span style="font-size:11px;color:var(--text-soft);flex-shrink:0">📌${doneCount}/${subCount}</span>` : ''}
     ${secondaryTags.length ? `<span style="font-size:10px;color:var(--text-soft);flex-shrink:0">${secondaryTags.map(t=>TAG_META[t]?.label.split(' ')[0]||t).join(' ')}</span>` : ''}
-    <button class="node-add-btn" onclick="event.stopPropagation();addSubtaskQuick('${task.id}')">＋</button>`;
+    <button class="node-add-btn" title="Open task to add a subtask" onclick="event.stopPropagation();addSubtaskQuick('${task.id}')">＋</button>`;
   node.onclick = () => showTaskDetail(task);
 
   wrap.appendChild(node);
@@ -361,16 +387,16 @@ function showTagDetail(tag, tasks) {
   const done = tasks.filter(t => t.status === 'done');
   let html = `<div class="detail-type">Tag</div>
     <div class="detail-title">${m.label}</div>
-    <span class="detail-chip" style="background:var(--lav-pale);color:#4a5fa0">${tasks.length} дел</span>
-    <span class="detail-chip" style="background:var(--green-pale);color:var(--green)">${done.length} готово</span>
+    <span class="detail-chip" style="background:var(--lav-pale);color:#4a5fa0">${tasks.length} task${tasks.length===1?'':'s'}</span>
+    <span class="detail-chip" style="background:var(--green-pale);color:var(--green)">${done.length} done</span>
     <div class="detail-section">
-      <div class="detail-section-label">Активные дела</div>
+      <div class="detail-section-label">Active tasks</div>
       ${active.map(t=>`<div class="detail-subtask" onclick="openTask('${t.id}')" style="cursor:pointer">
         <div class="detail-subtask-dot dot-in-progress"></div>
         <div>${escHtml(t.title)}</div>
-      </div>`).join('') || '<div style="color:var(--text-soft);font-size:13px">Нет активных дел</div>'}
+      </div>`).join('') || '<div style="color:var(--text-soft);font-size:13px">No active tasks</div>'}
     </div>
-    <button class="detail-add-btn" onclick="localStorage.setItem('presetTag','${tag}');window.location.href='add-task.html'">+ Добавить дело в этот раздел</button>`;
+    <button class="detail-add-btn" onclick="localStorage.setItem('newTaskPresetTag','${tag}');window.location.href='add-task.html'">+ Add task to this area</button>`;
   openDetail(html, m.label);
 }
 
@@ -379,18 +405,19 @@ function showTaskDetail(task) {
   const statusColors = {new:'var(--blue-light)','in-progress':'var(--amber)',blocked:'var(--red)',done:'var(--green)'};
   const col = statusColors[task.status] || 'var(--blue-light)';
   const subtasks = task.subtasks || [];
+  const isDone = task.status === 'done';
   let html = `<div class="detail-type">Task</div>
     <div class="detail-title">${escHtml(task.title)}</div>
-    <span class="detail-chip" style="background:${col}22;color:${col}">${statusLabels[task.status]||'Новое'}</span>
+    <span class="detail-chip" style="background:${col}22;color:${col}">${statusLabels[task.status]||'New'}</span>
     ${task.deadline ? `<span class="detail-chip" style="background:var(--lav-pale);color:var(--lavender)">📅 ${fmtDate(task.deadline)}</span>` : ''}
+    ${task.recurring ? `<span class="detail-chip" style="background:var(--lav-pale);color:var(--lavender)">♻ ${task.recurring.frequency}</span>` : ''}
     ${task.notes ? `<div style="font-size:13px;color:var(--text-soft);margin-top:10px;line-height:1.5">${escHtml(task.notes)}</div>` : ''}`;
 
   if (subtasks.length) {
-    const dotCls = {new:'dot-new','in-progress':'dot-in-progress',blocked:'dot-blocked',done:'dot-done'};
     html += `<div class="detail-section">
-      <div class="detail-section-label">Подзадачи (${subtasks.filter(s=>s.status==='done').length}/${subtasks.length})</div>
-      ${subtasks.map(s=>`<div class="detail-subtask">
-        <div class="detail-subtask-dot ${dotCls[s.status]||'dot-new'}"></div>
+      <div class="detail-section-label">Subtasks (${subtasks.filter(s=>s.status==='done').length}/${subtasks.length}) — tap to toggle</div>
+      ${subtasks.map((s,i)=>`<div class="detail-subtask clickable" onclick="toggleSubtaskDoneMM('${task.id}',${i})">
+        <div class="detail-check ${s.status==='done'?'done':''}">${s.status==='done'?'✓':''}</div>
         <div>
           <div style="${s.status==='done'?'text-decoration:line-through;opacity:.6':''}">${escHtml(s.title)}</div>
           ${s.note?`<div style="font-size:11px;color:var(--text-soft);margin-top:2px">${escHtml(s.note)}</div>`:''}
@@ -398,24 +425,66 @@ function showTaskDetail(task) {
       </div>`).join('')}
     </div>`;
   }
-  html += `<button class="detail-open-btn" onclick="openTask('${task.id}')">→ Открыть дело</button>
-    <button class="detail-add-btn" onclick="openTask('${task.id}')">+ Добавить подзадачу</button>`;
-  openDetail(html, 'Дело');
+  html += `<button class="detail-done-btn ${isDone?'reopen':''}" onclick="toggleTaskDoneMM('${task.id}')">${isDone?'↩ Reopen task':'✓ Mark done'}</button>
+    <button class="detail-open-btn" onclick="openTask('${task.id}')">→ Open task</button>
+    <button class="detail-add-btn" onclick="openTask('${task.id}')">+ Add subtask</button>`;
+  openDetail(html, 'Task');
 }
 
 function showSubtaskDetail(task, idx) {
   const s = task.subtasks[idx];
   const statusLabels = {new:'New','in-progress':'In Progress',blocked:'Blocked',done:'Done'};
-  const dotCls = {new:'dot-new','in-progress':'dot-in-progress',blocked:'dot-blocked',done:'dot-done'};
+  const isDone = s.status === 'done';
   let html = `<div class="detail-type">Subtask</div>
     <div class="detail-title">${escHtml(s.title)}</div>
-    <span class="detail-chip" style="background:var(--lav-pale);color:var(--lavender)">${statusLabels[s.status]||'Новое'}</span>
+    <span class="detail-chip" style="background:var(--lav-pale);color:var(--lavender)">${statusLabels[s.status]||'New'}</span>
     ${s.dueDate ? `<span class="detail-chip" style="background:var(--surface2);color:var(--text-soft)">📅 ${fmtDate(s.dueDate)}</span>` : ''}
     ${s.assigned ? `<span class="detail-chip" style="background:var(--green-pale);color:var(--green)">👤 ${escHtml(s.assigned)}</span>` : ''}
     ${s.note ? `<div style="font-size:13px;color:var(--text-soft);margin-top:12px;line-height:1.5;padding:10px;background:var(--bg);border-radius:8px">${escHtml(s.note)}</div>` : ''}
-    <div style="margin-top:14px;font-size:12px;color:var(--text-soft)">Часть дела: <strong>${escHtml(task.title)}</strong></div>
-    <button class="detail-open-btn" onclick="openTask('${task.id}')">→ Перейти к делу</button>`;
-  openDetail(html, 'Подзадача');
+    <div style="margin-top:14px;font-size:12px;color:var(--text-soft)">Part of: <strong>${escHtml(task.title)}</strong></div>
+    <button class="detail-done-btn ${isDone?'reopen':''}" onclick="toggleSubtaskDoneMM('${task.id}',${idx})">${isDone?'↩ Reopen subtask':'✓ Mark done'}</button>
+    <button class="detail-open-btn" onclick="openTask('${task.id}')">→ Go to task</button>`;
+  openDetail(html, 'Subtask');
+}
+
+// ── QUICK ACTIONS (write straight to Firestore, no page change) ──
+window.toggleSubtaskDoneMM = async function(taskId, idx) {
+  const t = allTasks.find(x => x.id === taskId);
+  const s = t && (t.subtasks||[])[idx];
+  if (!s) return;
+  s.status = s.status === 'done' ? 'new' : 'done';
+  try { await setDoc(doc(db,'tasks',taskId), t); } catch(e) { console.error(e); return; }
+  renderMap();
+  showTaskDetail(t);
+}
+
+window.toggleTaskDoneMM = async function(taskId) {
+  const t = allTasks.find(x => x.id === taskId);
+  if (!t) return;
+  try {
+    if (t.status !== 'done' && t.recurring) {
+      // Rolling recurring model: archive a done copy, roll this task forward
+      const rec = t.recurring;
+      const base = rec.nextDue || t.deadline || todayStr();
+      const next = nextOccurrence(base, rec.frequency, rec.interval || 1);
+      const archiveId = 'task-' + Date.now() + '-' + Math.random().toString(36).slice(2,5);
+      const archived = {...t, id: archiveId, status:'done', doneAt: new Date().toISOString(), recurring: null};
+      await setDoc(doc(db,'tasks',archiveId), archived);
+      t.status = 'new'; t.doneAt = null; t.deadline = next; t.nextAction = null;
+      t.subtasks = (t.subtasks||[]).map(s => ({...s, status:'new'}));
+      t.recurring = {...rec, nextDue: next};
+      await setDoc(doc(db,'tasks',t.id), t);
+      allTasks.push(archived);
+    } else if (t.status !== 'done') {
+      t.status = 'done'; t.doneAt = new Date().toISOString();
+      await setDoc(doc(db,'tasks',t.id), t);
+    } else {
+      t.status = 'new'; t.doneAt = null;
+      await setDoc(doc(db,'tasks',t.id), t);
+    }
+  } catch(e) { console.error(e); return; }
+  renderMap();
+  showTaskDetail(t);
 }
 
 window.openTask = function(id) {
@@ -428,6 +497,25 @@ window.addSubtaskQuick = function(taskId) {
   window.location.href = 'task.html';
 }
 
+function advanceDate(dateStr, frequency, interval) {
+  const d = new Date(dateStr + 'T12:00:00');
+  switch(frequency) {
+    case 'daily':   d.setDate(d.getDate() + interval); break;
+    case 'weekly':  d.setDate(d.getDate() + 7 * interval); break;
+    case 'monthly': d.setMonth(d.getMonth() + interval); break;
+    case 'yearly':  d.setFullYear(d.getFullYear() + interval); break;
+  }
+  return d.toISOString().split('T')[0];
+}
+
+function nextOccurrence(baseStr, frequency, interval) {
+  const today = todayStr();
+  let next = advanceDate(baseStr, frequency, interval);
+  let guard = 0;
+  while (next <= today && guard++ < 1000) next = advanceDate(next, frequency, interval);
+  return next;
+}
+
 // ── HELPERS ──
 function todayStr() { return new Date().toISOString().split('T')[0]; }
 function daysDiff(a, b) { return Math.round((new Date(b)-new Date(a))/(1000*60*60*24)); }
@@ -437,7 +525,7 @@ function fmtDate(d) {
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return `${parseInt(day)} ${months[parseInt(m)-1]}`;
 }
-function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 </script>
 <script src="pwa.js"></script>
 </body>

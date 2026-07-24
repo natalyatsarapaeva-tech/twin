@@ -147,19 +147,10 @@
 </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-import { getFirestore, collection, getDocs, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+import { db, collection, getDocs, doc, getDoc, setDoc } from './js/firebase.js';
+import { initAuth, getActiveNotebookId, setActiveNotebookId, listMyNotebooks, resolveActiveNotebook } from './js/store.js';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyD1uWPrp12lvpyBzXCOq9IrMuTU4uOTRao",
-  authDomain: "natas-kitchen.firebaseapp.com",
-  projectId: "natas-kitchen",
-  storageBucket: "natas-kitchen.firebasestorage.app",
-  messagingSenderId: "756908196325",
-  appId: "1:756908196325:web:e8bab3aac2a322f9436f0c"
-};
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+let NB = null;  // id активного блокнота — скоуп всех путей к данным
 
 // ── TAGS ──
 const DEFAULT_TAGS = {
@@ -189,9 +180,9 @@ function buildTagMeta() {
 }
 async function loadTags() {
   try {
-    const snap = await getDoc(doc(db,'meta','tags'));
+    const snap = await getDoc(doc(db,'notebooks',NB,'meta','tags'));
     if (snap.exists()) { TAGS_CONFIG = snap.data(); }
-    else { await setDoc(doc(db,'meta','tags'), DEFAULT_TAGS); }
+    else { await setDoc(doc(db,'notebooks',NB,'meta','tags'), DEFAULT_TAGS); }
   } catch(e) { console.warn('loadTags failed, using defaults'); }
   buildTagMeta();
 }
@@ -205,13 +196,21 @@ window.toggleShowDone = function(cb) {
 }
 
 async function load() {
-  const snap = await getDocs(collection(db, 'tasks'));
+  const snap = await getDocs(collection(db, 'notebooks', NB, 'tasks'));
   allTasks = snap.docs.map(d => ({id:d.id,...d.data()}));
   document.getElementById('loading').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
   renderMap();
 }
-async function init() { await loadTags(); load(); }
+async function gate() {
+  const user = await initAuth();
+  if (!user) { location.href = 'index.html'; return false; }
+  NB = getActiveNotebookId();
+  if (!NB) NB = resolveActiveNotebook(await listMyNotebooks());
+  if (!NB) { location.href = 'index.html'; return false; }
+  return true;
+}
+async function init() { if (!await gate()) return; await loadTags(); load(); }
 init().catch(e => {
   document.getElementById('loading').innerHTML = `<div style='color:var(--blue-pale);padding:24px;text-align:center'>Error: ${e.message}</div>`;
 });
@@ -453,7 +452,7 @@ window.toggleSubtaskDoneMM = async function(taskId, idx) {
   const s = t && (t.subtasks||[])[idx];
   if (!s) return;
   s.status = s.status === 'done' ? 'new' : 'done';
-  try { await setDoc(doc(db,'tasks',taskId), t); } catch(e) { console.error(e); return; }
+  try { await setDoc(doc(db,'notebooks',NB,'tasks',taskId), t); } catch(e) { console.error(e); return; }
   renderMap();
   showTaskDetail(t);
 }
@@ -469,18 +468,18 @@ window.toggleTaskDoneMM = async function(taskId) {
       const next = nextOccurrence(base, rec.frequency, rec.interval || 1);
       const archiveId = 'task-' + Date.now() + '-' + Math.random().toString(36).slice(2,5);
       const archived = {...t, id: archiveId, status:'done', doneAt: new Date().toISOString(), recurring: null};
-      await setDoc(doc(db,'tasks',archiveId), archived);
+      await setDoc(doc(db,'notebooks',NB,'tasks',archiveId), archived);
       t.status = 'new'; t.doneAt = null; t.deadline = next; t.nextAction = null;
       t.subtasks = (t.subtasks||[]).map(s => ({...s, status:'new'}));
       t.recurring = {...rec, nextDue: next};
-      await setDoc(doc(db,'tasks',t.id), t);
+      await setDoc(doc(db,'notebooks',NB,'tasks',t.id), t);
       allTasks.push(archived);
     } else if (t.status !== 'done') {
       t.status = 'done'; t.doneAt = new Date().toISOString();
-      await setDoc(doc(db,'tasks',t.id), t);
+      await setDoc(doc(db,'notebooks',NB,'tasks',t.id), t);
     } else {
       t.status = 'new'; t.doneAt = null;
-      await setDoc(doc(db,'tasks',t.id), t);
+      await setDoc(doc(db,'notebooks',NB,'tasks',t.id), t);
     }
   } catch(e) { console.error(e); return; }
   renderMap();

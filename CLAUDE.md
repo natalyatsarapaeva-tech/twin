@@ -26,6 +26,12 @@ repo root/
 ├── context.html        — wide context page: user profile + per-tag AI context/summaries
 ├── voice.js            — shared voice input utility (Web Speech API, EN/RU toggle)
 ├── CLAUDE.md           — this file
+├── AUTH-SETUP.md       — auth + Notebooks setup guide (Wave 8)
+├── firestore.rules     — membership-based access rules (per notebook)
+├── js/
+│   ├── firebase.js     — shared Firebase init (Firestore + Auth) + authReady
+│   ├── twin-core.js    — pure logic: roles, join codes, ids, active notebook, DEFAULT_TAGS
+│   └── store.js        — auth + notebook CRUD + scoped data refs + legacy migration
 └── worker/
     ├── task-intake-worker.js   — Cloudflare Worker: email + Slack → GPT → Firebase
     ├── wrangler.toml           — Cloudflare Worker config
@@ -44,7 +50,7 @@ repo root/
 |Deep research      |Multi-step GPT agent (3 sequential calls)    |
 |Voice input        |Web Speech API (browser-native, no API key)  |
 |Inbound email/Slack|Cloudflare Worker → Postmark webhook         |
-|Auth               |None yet (single user, Firebase in test mode)|
+|Auth               |Firebase Auth (Google + email/password) — Wave 8   |
 
 **Firebase project:** `natas-kitchen`
 **Firebase config** is in each HTML file — same config block in all 4 files.
@@ -54,15 +60,31 @@ repo root/
 
 ## Firebase Firestore collections
 
+Since Wave 8 all task data is scoped under a **Notebook** (`notebooks/{nid}/…`)
+and gated by membership. The old top-level `tasks/`, `contexts/`, `meta/`
+collections are migrated into the user's first notebook on first login
+(`migrateLegacyData` in `js/store.js`).
+
 ```
-tasks/          — task documents
-contexts/
+users/{uid}                     — {displayName, email, createdAt}
+users/{uid}/notebooks/{nid}     — "my notebooks" index {role, name, joinedAt}
+notebooks/{nid}                 — {name, ownerUid, joinCode, createdAt}
+notebooks/{nid}/members/{uid}   — source of truth for access {role: owner|editor}
+notebooks/{nid}/tasks/{id}      — task documents (was: tasks/)
+notebooks/{nid}/contexts/
   user          — {profile, chatSummary, updatedAt}
   tag-dev       — {profile, taskSummary, chatSummary, summaryUpdatedAt}
-  tag-clients   — same structure
-  tag-kids      — same structure
   ... (one doc per tag)
+notebooks/{nid}/meta/
+  tags                  — tag taxonomy for this notebook
+  notificationSettings  — per-notebook notification config
 ```
+
+Every page computes `NB` (active notebook id, from `localStorage.activeNotebookId`)
+after auth and scopes all Firestore paths through it. Auth + notebook management
+live in the shared `js/*` modules; secondary pages redirect to `index.html` when
+not signed in. See `AUTH-SETUP.md` for Firebase console setup and the
+rules-deploy order.
 
 ### Task document schema
 

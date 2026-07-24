@@ -219,19 +219,10 @@
 <div id="toast"></div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+import { db, doc, getDoc, setDoc, collection, getDocs } from './js/firebase.js';
+import { initAuth, getActiveNotebookId, setActiveNotebookId, listMyNotebooks, resolveActiveNotebook } from './js/store.js';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyD1uWPrp12lvpyBzXCOq9IrMuTU4uOTRao",
-  authDomain: "natas-kitchen.firebaseapp.com",
-  projectId: "natas-kitchen",
-  storageBucket: "natas-kitchen.firebasestorage.app",
-  messagingSenderId: "756908196325",
-  appId: "1:756908196325:web:e8bab3aac2a322f9436f0c"
-};
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+let NB = null;  // id активного блокнота — скоуп всех путей к данным
 
 // ── TAGS ──
 const DEFAULT_TAGS = {
@@ -261,9 +252,9 @@ function buildTagMeta() {
 }
 async function loadTags() {
   try {
-    const snap = await getDoc(doc(db,'meta','tags'));
+    const snap = await getDoc(doc(db,'notebooks',NB,'meta','tags'));
     if (snap.exists()) { TAGS_CONFIG = snap.data(); }
-    else { await setDoc(doc(db,'meta','tags'), DEFAULT_TAGS); }
+    else { await setDoc(doc(db,'notebooks',NB,'meta','tags'), DEFAULT_TAGS); }
   } catch(e) { console.warn('loadTags failed, using defaults'); }
   buildTagMeta();
 }
@@ -295,7 +286,16 @@ function renderTagGrid() {
     TAGS_CONFIG.personal.map(t=>`<button class="tag-opt personal${selectedTags.includes(t.id)?' sel':''}" onclick="toggleTag('${t.id}',this)">${t.emoji} ${t.label}</button>`).join('') +
     `</div></div>`;
 }
+async function gate() {
+  const user = await initAuth();
+  if (!user) { location.href = 'index.html'; return false; }
+  NB = getActiveNotebookId();
+  if (!NB) NB = resolveActiveNotebook(await listMyNotebooks());
+  if (!NB) { location.href = 'index.html'; return false; }
+  return true;
+}
 (async function init() {
+  if (!await gate()) return;
   await loadTags();
   renderTagGrid();
   const preset = localStorage.getItem('newTaskPresetTag');
@@ -388,7 +388,7 @@ window.saveTask = async function() {
   const btn = document.getElementById('save-btn');
   btn.disabled = true; btn.textContent = 'Saving…';
   try {
-    await setDoc(doc(db, 'tasks', id), task);
+    await setDoc(doc(db, 'notebooks', NB, 'tasks', id), task);
     if (task.tags.length) triggerTagSummaryFromAdd(task.tags);
     toast('✅ Task saved!');
     setTimeout(() => window.location.href = 'index.html', 1200);
@@ -485,7 +485,7 @@ window.saveBatch = async function() {
   try {
     for (const t of toSave) {
       const id = 'task-' + Date.now() + '-' + Math.random().toString(36).slice(2,6);
-      await setDoc(doc(db, 'tasks', id), {
+      await setDoc(doc(db, 'notebooks', NB, 'tasks', id), {
         id, title:t.title, description:'', tags:t.tags||[],
         deadline:t.deadline||null, nextAction:t.nextAction||null, priority:t.priority||'none',
         status:'new', subtasks:[], notes:'', createdAt:new Date().toISOString()
@@ -559,7 +559,7 @@ window.analyzeBatchImage = async function(){
 // Fire-and-forget tag summary update after task save
 async function triggerTagSummaryFromAdd(tags) {
   try {
-    const snap = await getDocs(collection(db, 'tasks'));
+    const snap = await getDocs(collection(db, 'notebooks', NB, 'tasks'));
     const allTasks = snap.docs.map(d => ({id:d.id,...d.data()}));
     const TAG_LABELS = Object.fromEntries([...TAGS_CONFIG.work,...TAGS_CONFIG.personal].map(t=>[t.id,t.label]));
     for (const tagId of tags) {
@@ -573,7 +573,7 @@ async function triggerTagSummaryFromAdd(tags) {
         {role:'user',content:`Area: ${TAG_LABELS[tagId]||tagId}\n\nTasks:\n${taskList}`}
       ]});
       const summary = data.choices[0].message.content.trim();
-      await setDoc(doc(db,'contexts','tag-'+tagId),
+      await setDoc(doc(db,'notebooks',NB,'contexts','tag-'+tagId),
         {taskSummary:summary,summaryUpdatedAt:new Date().toISOString()},{merge:true});
     }
   } catch(e) { /* silent */ }

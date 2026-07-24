@@ -357,19 +357,10 @@
 <div id="toast"></div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, updateDoc, deleteDoc, setDoc, getDocs, collection } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+import { db, doc, getDoc, updateDoc, deleteDoc, setDoc, getDocs, collection } from './js/firebase.js';
+import { initAuth, getActiveNotebookId, setActiveNotebookId, listMyNotebooks, resolveActiveNotebook } from './js/store.js';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyD1uWPrp12lvpyBzXCOq9IrMuTU4uOTRao",
-  authDomain: "natas-kitchen.firebaseapp.com",
-  projectId: "natas-kitchen",
-  storageBucket: "natas-kitchen.firebasestorage.app",
-  messagingSenderId: "756908196325",
-  appId: "1:756908196325:web:e8bab3aac2a322f9436f0c"
-};
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+let NB = null;  // id активного блокнота — скоуп всех путей к данным
 
 // ── TAG TAXONOMY ──
 // ── TAGS ──
@@ -400,9 +391,9 @@ function buildTagMeta() {
 }
 async function loadTags() {
   try {
-    const snap = await getDoc(doc(db,'meta','tags'));
+    const snap = await getDoc(doc(db,'notebooks',NB,'meta','tags'));
     if (snap.exists()) { TAGS_CONFIG = snap.data(); }
-    else { await setDoc(doc(db,'meta','tags'), DEFAULT_TAGS); }
+    else { await setDoc(doc(db,'notebooks',NB,'meta','tags'), DEFAULT_TAGS); }
   } catch(e) { console.warn('loadTags failed, using defaults'); }
   buildTagMeta();
 }
@@ -417,7 +408,7 @@ let pendingAiSubtasks = null;
 async function load() {
   const id = localStorage.getItem('currentTaskId');
   if (!id) { window.location.href = 'index.html'; return; }
-  const snap = await getDoc(doc(db, 'tasks', id));
+  const snap = await getDoc(doc(db, 'notebooks', NB, 'tasks', id));
   if (!snap.exists()) { window.location.href = 'index.html'; return; }
   task = {id: snap.id, ...snap.data()};
   // Read-time migration: old tasks used dueDate, now we use deadline
@@ -433,7 +424,15 @@ async function load() {
   const tlw = document.getElementById('task-lang-wrap');
   if (tlw) createLangToggle(tlw);
 }
-async function init() { await loadTags(); load(); }
+async function gate() {
+  const user = await initAuth();
+  if (!user) { location.href = 'index.html'; return false; }
+  NB = getActiveNotebookId();
+  if (!NB) NB = resolveActiveNotebook(await listMyNotebooks());
+  if (!NB) { location.href = 'index.html'; return false; }
+  return true;
+}
+async function init() { if (!await gate()) return; await loadTags(); load(); }
 init().catch(e => {
   document.getElementById('loading').innerHTML = `<div style="color:#c8dcf0;padding:24px;text-align:center">Error: ${e.message}</div>`;
 });
@@ -573,14 +572,14 @@ window.setStatus = async function(status, el) {
     const archiveId = 'task-' + Date.now() + '-' + Math.random().toString(36).slice(2,5);
     const archived = {...task, id: archiveId, status: 'done',
       doneAt: new Date().toISOString(), recurring: null};
-    await setDoc(doc(db,'tasks',archiveId), archived);
+    await setDoc(doc(db,'notebooks',NB,'tasks',archiveId), archived);
     task.status = 'new';
     task.doneAt = null;
     task.deadline = next;
     task.nextAction = null;
     task.subtasks = (task.subtasks||[]).map(s => ({...s, status:'new'}));
     task.recurring = {...rec, nextDue: next};
-    await setDoc(doc(db,'tasks',task.id), task);
+    await setDoc(doc(db,'notebooks',NB,'tasks',task.id), task);
     render();
     if (task.tags && task.tags.length) triggerTagSummaryUpdate(task.tags);
     toast(`✓ Done — next occurrence: ${fmtDate(next)}`);
@@ -823,7 +822,7 @@ async function gpt(payload) {
 async function loadSiblingTasks() {
   if (!(task.tags||[]).length) return [];
   try {
-    const snap = await getDocs(collection(db, 'tasks'));
+    const snap = await getDocs(collection(db, 'notebooks', NB, 'tasks'));
     const all = snap.docs.map(d => ({id:d.id,...d.data()}));
     return all.filter(t =>
       t.id !== task.id &&
@@ -1205,7 +1204,7 @@ window.deleteTask = async function() {
     return;
   }
   if (!confirm(`Delete "${task.title}"? This cannot be undone.`)) return;
-  await deleteDoc(doc(db, 'tasks', task.id));
+  await deleteDoc(doc(db, 'notebooks', NB, 'tasks', task.id));
   window.location.href = 'index.html';
 }
 
@@ -1225,13 +1224,13 @@ window.deleteThisOccurrence = async function() {
   task.status = 'new';
   task.doneAt = null;
   task.subtasks = (task.subtasks || []).map(s => ({ ...s, status: 'new' }));
-  await setDoc(doc(db, 'tasks', task.id), task);
+  await setDoc(doc(db, 'notebooks', NB, 'tasks', task.id), task);
   window.location.href = 'index.html';
 }
 
 // Delete the whole series — removing the template stops future occurrences
 window.deleteAllOccurrences = async function() {
-  await deleteDoc(doc(db, 'tasks', task.id));
+  await deleteDoc(doc(db, 'notebooks', NB, 'tasks', task.id));
   window.location.href = 'index.html';
 }
 
@@ -1263,7 +1262,7 @@ async function save() {
     const derived = deriveNextAction(task);
     if (derived) task.nextAction = derived;
   }
-  await updateDoc(doc(db, 'tasks', task.id), task);
+  await updateDoc(doc(db, 'notebooks', NB, 'tasks', task.id), task);
   render();
 }
 
@@ -1271,7 +1270,7 @@ async function save() {
 async function triggerTagSummaryUpdate(tags) {
   if (!tags || !tags.length) return;
   try {
-    const snap = await getDocs(collection(db, 'tasks'));
+    const snap = await getDocs(collection(db, 'notebooks', NB, 'tasks'));
     const allTasks = snap.docs.map(d => ({id:d.id,...d.data()}));
     for (const tagId of tags) {
       const tagTasks = allTasks.filter(t => (t.tags||[]).includes(tagId));
@@ -1285,7 +1284,7 @@ async function triggerTagSummaryUpdate(tags) {
         {role:'user',content:`Area: ${TAG_LABELS[tagId]||tagId}\n\nTasks:\n${taskList}`}
       ]});
       const summary = data.choices[0].message.content.trim();
-      await setDoc(doc(db,'contexts','tag-'+tagId),
+      await setDoc(doc(db,'notebooks',NB,'contexts','tag-'+tagId),
         {taskSummary:summary, summaryUpdatedAt:new Date().toISOString()},{merge:true});
     }
   } catch(e) { /* silent */ }

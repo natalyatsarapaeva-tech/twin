@@ -146,19 +146,10 @@
 <div id="toast"></div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+import { db, doc, getDoc, setDoc, collection, getDocs } from './js/firebase.js';
+import { initAuth, getActiveNotebookId, setActiveNotebookId, listMyNotebooks, resolveActiveNotebook } from './js/store.js';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyD1uWPrp12lvpyBzXCOq9IrMuTU4uOTRao",
-  authDomain: "natas-kitchen.firebaseapp.com",
-  projectId: "natas-kitchen",
-  storageBucket: "natas-kitchen.firebasestorage.app",
-  messagingSenderId: "756908196325",
-  appId: "1:756908196325:web:e8bab3aac2a322f9436f0c"
-};
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+let NB = null;  // id активного блокнота — скоуп всех путей к данным
 
 const DEFAULT_TAGS = {
   work: [
@@ -183,9 +174,9 @@ function buildTagMeta() {
 }
 async function loadTags() {
   try {
-    const snap = await getDoc(doc(db,'meta','tags'));
+    const snap = await getDoc(doc(db,'notebooks',NB,'meta','tags'));
     if (snap.exists()) { TAGS_CONFIG = snap.data(); }
-    else { await setDoc(doc(db,'meta','tags'), DEFAULT_TAGS); }
+    else { await setDoc(doc(db,'notebooks',NB,'meta','tags'), DEFAULT_TAGS); }
   } catch(e) { console.warn('loadTags failed, using defaults'); }
   buildTagMeta();
 }
@@ -199,7 +190,7 @@ let allTasks = [];
 async function load() {
   // Load user context
   try {
-    const userSnap = await getDoc(doc(db, 'contexts', 'user'));
+    const userSnap = await getDoc(doc(db, 'notebooks', NB, 'contexts', 'user'));
     if (userSnap.exists()) {
       userCtx = userSnap.data();
       document.getElementById('user-profile').value = userCtx.profile || '';
@@ -209,14 +200,14 @@ async function load() {
 
   // Load all tasks (for task count display)
   try {
-    const snap = await getDocs(collection(db, 'tasks'));
+    const snap = await getDocs(collection(db, 'notebooks', NB, 'tasks'));
     allTasks = snap.docs.map(d => ({id:d.id,...d.data()}));
   } catch(e) {}
 
   // Load all tag contexts
   for (const tag of [...TAGS_CONFIG.work, ...TAGS_CONFIG.personal]) {
     try {
-      const snap = await getDoc(doc(db, 'contexts', 'tag-' + tag.id));
+      const snap = await getDoc(doc(db, 'notebooks', NB, 'contexts', 'tag-' + tag.id));
       contexts[tag.id] = snap.exists() ? snap.data() : {};
     } catch(e) { contexts[tag.id] = {}; }
   }
@@ -226,7 +217,16 @@ async function load() {
   document.getElementById('page-content').style.display = 'block';
 }
 
+async function gate() {
+  const user = await initAuth();
+  if (!user) { location.href = 'index.html'; return false; }
+  NB = getActiveNotebookId();
+  if (!NB) NB = resolveActiveNotebook(await listMyNotebooks());
+  if (!NB) { location.href = 'index.html'; return false; }
+  return true;
+}
 async function init() {
+  if (!await gate()) return;
   await loadTags();
   await load();
   renderTagEditor();
@@ -377,7 +377,7 @@ window.addTagSave = async function(group, newId) {
 // ── PERSIST TAGS (internal) ──
 async function persistTags() {
   try {
-    await setDoc(doc(db,'meta','tags'), TAGS_CONFIG);
+    await setDoc(doc(db,'notebooks',NB,'meta','tags'), TAGS_CONFIG);
     showBadge('tags-saved');
     renderTagList();
   } catch(e) { toast('Error saving tags: ' + e.message); }
@@ -396,7 +396,7 @@ window.toggleTag = function(tagId) {
 window.saveUserProfile = async function() {
   const profile = document.getElementById('user-profile').value.trim();
   try {
-    await setDoc(doc(db, 'contexts', 'user'), {
+    await setDoc(doc(db, 'notebooks', NB, 'contexts', 'user'), {
       ...userCtx, profile, updatedAt: new Date().toISOString()
     }, {merge: true});
     userCtx.profile = profile;
@@ -407,7 +407,7 @@ window.saveUserProfile = async function() {
 // ── CLEAR USER CHAT SUMMARY ──
 window.clearUserChatSummary = async function() {
   try {
-    await setDoc(doc(db, 'contexts', 'user'), {chatSummary: '', updatedAt: new Date().toISOString()}, {merge: true});
+    await setDoc(doc(db, 'notebooks', NB, 'contexts', 'user'), {chatSummary: '', updatedAt: new Date().toISOString()}, {merge: true});
     document.getElementById('user-chat-summary').value = '';
     userCtx.chatSummary = '';
     showBadge('summary-cleared');
@@ -419,7 +419,7 @@ window.saveTagProfile = async function(tagId) {
   const profile = document.getElementById('tag-profile-' + tagId).value.trim();
   const existing = contexts[tagId] || {};
   try {
-    await setDoc(doc(db, 'contexts', 'tag-' + tagId), {
+    await setDoc(doc(db, 'notebooks', NB, 'contexts', 'tag-' + tagId), {
       ...existing, profile, updatedAt: new Date().toISOString()
     }, {merge: true});
     contexts[tagId] = {...existing, profile};
@@ -431,7 +431,7 @@ window.saveTagProfile = async function(tagId) {
 window.clearTagChatSummary = async function(tagId) {
   const existing = contexts[tagId] || {};
   try {
-    await setDoc(doc(db, 'contexts', 'tag-' + tagId), {
+    await setDoc(doc(db, 'notebooks', NB, 'contexts', 'tag-' + tagId), {
       ...existing, chatSummary: '', updatedAt: new Date().toISOString()
     }, {merge: true});
     document.getElementById('tag-chat-' + tagId).value = '';

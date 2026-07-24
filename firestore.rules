@@ -1,0 +1,69 @@
+// Firestore rules для Twin Tasks — доступ = членство в блокноте.
+// Роли MVP: owner | editor. viewer — отдельная волна (сейчас любой член пишет).
+//
+// ⚠️ Пока эти правила не задеплоены, база в test mode (открыта всем) — этого
+// требует разовая миграция legacy-данных (см. js/store.js → migrateLegacyData),
+// которая читает старые коллекции tasks/, contexts/, meta/ верхнего уровня.
+// Порядок: (1) войти хотя бы одним пользователем — миграция перенесёт данные в
+// первый блокнот; (2) затем задеплоить эти правила.
+//
+// Деплой: Firebase Console → Firestore Database → Rules
+//   (или firebase deploy --only firestore:rules).
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+
+    // Профиль + индекс «мои блокноты» (денормализация; сам по себе прав не даёт).
+    match /users/{u} {
+      allow read, write: if signedIn() && u == uid();
+      match /notebooks/{nid} {
+        allow read, write: if signedIn() && u == uid();
+      }
+    }
+
+    match /notebooks/{nid} {
+      function isMember() {
+        return exists(/databases/$(database)/documents/notebooks/$(nid)/members/$(uid()));
+      }
+      function role() {
+        return get(/databases/$(database)/documents/notebooks/$(nid)/members/$(uid())).data.role;
+      }
+
+      // read нужен и не-членам для поиска блокнота по коду приглашения (joinCode).
+      allow read:   if signedIn();
+      allow create: if signedIn() && request.resource.data.ownerUid == uid();
+      allow update, delete: if isMember() && role() == 'owner';
+
+      match /members/{m} {
+        allow read: if isMember();
+        // Создатель блокнота записывает первого владельца (себя);
+        // дальше участниками управляет только owner. Присоединиться по коду
+        // может любой вошедший (пишет себя как editor).
+        allow create: if signedIn()
+          && ((m == uid() && request.resource.data.role == 'owner'
+               && get(/databases/$(database)/documents/notebooks/$(nid)).data.ownerUid == uid())
+              || (m == uid() && request.resource.data.role == 'editor')
+              || (isMember() && role() == 'owner'));
+        allow update, delete: if isMember() && role() == 'owner';
+      }
+
+      // Задачи, контекст и теги — правит любой член (owner|editor).
+      match /tasks/{id} {
+        allow read:  if isMember();
+        allow write: if isMember();
+      }
+      match /contexts/{id} {
+        allow read:  if isMember();
+        allow write: if isMember();
+      }
+      match /meta/{id} {
+        allow read:  if isMember();
+        allow write: if isMember();
+      }
+    }
+  }
+}

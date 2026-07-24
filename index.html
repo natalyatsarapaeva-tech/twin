@@ -44,6 +44,49 @@
     .loading-text{color:var(--blue-pale);font-family:'Spectral',serif;font-size:22px;margin-top:16px;letter-spacing:.02em;}
     @keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.1);opacity:.8}}
 
+    /* ── AUTH SCREEN ── */
+    #auth-screen{display:none;position:fixed;inset:0;background:linear-gradient(160deg,var(--slate) 0%,#2e4a6a 100%);z-index:900;align-items:center;justify-content:center;padding:24px;}
+    .auth-card{width:100%;max-width:360px;background:var(--white);border-radius:22px;padding:32px 26px;box-shadow:0 20px 60px rgba(0,0,0,.3);display:flex;flex-direction:column;}
+    .auth-logo{font-size:44px;text-align:center;}
+    .auth-title{font-family:'Spectral',serif;font-size:26px;color:var(--slate);text-align:center;margin-top:8px;line-height:1.2;}
+    .auth-title em{color:var(--lavender);font-style:italic;}
+    .auth-sub{font-size:13px;color:var(--text-soft);text-align:center;margin:8px 0 20px;line-height:1.4;}
+    .auth-google{padding:13px;border-radius:14px;border:2px solid var(--border);background:var(--white);color:var(--text);font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;cursor:pointer;transition:all .2s;}
+    .auth-google:hover{border-color:var(--lavender);background:var(--bg);}
+    .auth-divider{text-align:center;font-size:11px;color:var(--text-soft);text-transform:uppercase;letter-spacing:.1em;margin:16px 0;position:relative;}
+    .auth-divider::before,.auth-divider::after{content:'';position:absolute;top:50%;width:28%;height:1px;background:var(--border);}
+    .auth-divider::before{left:0;}.auth-divider::after{right:0;}
+    .auth-input{padding:12px 14px;border-radius:12px;border:2px solid var(--border);background:var(--white);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--text);outline:none;margin-bottom:10px;}
+    .auth-input:focus{border-color:var(--lavender);}
+    .auth-error{color:var(--red,#e05555);font-size:12px;min-height:16px;margin-bottom:6px;line-height:1.3;}
+    .auth-submit{padding:13px;border-radius:14px;border:none;background:var(--slate);color:var(--white);font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;cursor:pointer;transition:opacity .2s;}
+    .auth-submit:hover{opacity:.9;}
+    .auth-toggle{background:none;border:none;color:var(--lavender);font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;margin-top:14px;text-align:center;}
+
+    /* ── NOTEBOOK BAR + SWITCHER ── */
+    .nb-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px;position:relative;z-index:2;}
+    .nb-switch{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.2);border-radius:20px;padding:6px 14px;cursor:pointer;color:var(--white);font-family:'DM Sans',sans-serif;max-width:75%;}
+    .nb-switch-icon{font-size:15px;}
+    .nb-switch-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .nb-switch-caret{font-size:11px;opacity:.8;}
+    .nb-avatar{width:38px;height:38px;flex-shrink:0;border-radius:50%;border:1px solid rgba(255,255,255,.25);background:var(--lavender);color:var(--white);font-family:'DM Sans',sans-serif;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+    .nb-overlay{display:none;position:fixed;inset:0;background:rgba(30,45,61,.45);z-index:200;}
+    .nb-sheet{position:fixed;left:0;right:0;bottom:0;z-index:201;background:var(--white);border-radius:22px 22px 0 0;padding:20px 22px calc(24px + env(safe-area-inset-bottom));box-shadow:0 -8px 40px rgba(0,0,0,.25);transform:translateY(100%);transition:transform .28s cubic-bezier(.16,1,.3,1);max-height:82vh;overflow-y:auto;max-width:640px;margin:0 auto;}
+    .nb-sheet.open{transform:translateY(0);}
+    .nb-handle{width:40px;height:4px;border-radius:2px;background:var(--border);margin:0 auto 14px;}
+    .nb-sheet-title{font-family:'Spectral',serif;font-size:20px;color:var(--slate);font-weight:600;margin-bottom:12px;}
+    .nb-item{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:13px 14px;border-radius:12px;border:2px solid var(--border);background:var(--white);cursor:pointer;margin-bottom:8px;font-family:'DM Sans',sans-serif;transition:all .15s;}
+    .nb-item:hover{border-color:var(--lavender);}
+    .nb-item.active{border-color:var(--slate);background:var(--lav-pale);}
+    .nb-item-name{font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .nb-item-role{font-size:13px;color:var(--text-soft);flex-shrink:0;}
+    .nb-active-actions{display:flex;gap:8px;margin:4px 0 4px;}
+    .nb-mini-btn{flex:1;padding:9px;border-radius:10px;border:1px solid var(--border);background:var(--bg);color:var(--text-soft);font-family:'DM Sans',sans-serif;font-size:12px;cursor:pointer;}
+    .nb-mini-btn:hover{color:var(--slate);border-color:var(--lavender);}
+    .nb-ghost-btn{width:100%;padding:12px;border-radius:12px;border:2px dashed var(--border);background:var(--white);color:var(--slate);font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:10px;}
+    .nb-ghost-btn:hover{border-color:var(--lavender);}
+    .nb-signout-btn{width:100%;padding:11px;border-radius:12px;border:none;background:none;color:var(--red,#e05555);font-family:'DM Sans',sans-serif;font-size:13px;cursor:pointer;margin-top:6px;}
+
     /* ── HOME ── */
     #home{display:none;flex-direction:column;min-height:100vh;}
 
@@ -201,8 +244,51 @@
   <div class="loading-text">Loading tasks…</div>
 </div>
 
+<!-- AUTH SCREEN -->
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-logo">📋</div>
+    <div class="auth-title">My Tasks <em>&amp; Projects</em></div>
+    <div class="auth-sub">Войди, чтобы открыть свои блокноты с задачами.</div>
+    <button class="auth-google" onclick="onGoogleSignIn()">🔵 Войти через Google</button>
+    <div class="auth-divider">или по email</div>
+    <input class="auth-input" id="auth-email" type="email" placeholder="Email" autocomplete="email">
+    <input class="auth-input" id="auth-pass" type="password" placeholder="Пароль" autocomplete="current-password">
+    <div class="auth-error" id="auth-error"></div>
+    <button class="auth-submit" id="auth-submit" onclick="onEmailSubmit()">Войти</button>
+    <button class="auth-toggle" id="auth-toggle" onclick="toggleAuthMode()">Нет аккаунта? Зарегистрироваться</button>
+  </div>
+</div>
+
+<!-- NOTEBOOK SWITCHER SHEET -->
+<div class="nb-overlay" id="nb-overlay" onclick="closeNotebookSwitcher()"></div>
+<div class="nb-sheet" id="nb-sheet">
+  <div class="nb-handle"></div>
+  <div class="nb-sheet-title">Мои блокноты</div>
+  <div id="nb-list"></div>
+  <div class="nb-active-actions">
+    <button class="nb-mini-btn" onclick="renameActiveNotebook()">✎ Переименовать</button>
+    <button class="nb-mini-btn" onclick="showNotebookCode()">🔑 Код приглашения</button>
+  </div>
+  <div class="auth-divider">создать или присоединиться</div>
+  <input class="auth-input" id="nb-new-name" placeholder="Название нового блокнота">
+  <button class="nb-ghost-btn" onclick="createNotebookFromInput()">＋ Создать блокнот</button>
+  <input class="auth-input" id="nb-join-code" placeholder="Код приглашения (напр. K7QMР2)">
+  <div class="auth-error" id="nb-join-error"></div>
+  <button class="nb-ghost-btn" onclick="joinNotebookFromInput()">Присоединиться по коду</button>
+  <button class="nb-signout-btn" onclick="doSignOut()">Выйти из аккаунта</button>
+</div>
+
 <div id="home">
   <div class="home-header">
+    <div class="nb-bar">
+      <button class="nb-switch" onclick="openNotebookSwitcher()">
+        <span class="nb-switch-icon">📒</span>
+        <span class="nb-switch-name" id="nb-name">Блокнот</span>
+        <span class="nb-switch-caret">▾</span>
+      </button>
+      <button class="nb-avatar" id="nb-avatar" onclick="openNotebookSwitcher()" title="Профиль / блокноты">?</button>
+    </div>
     <div class="header-owl-row">
       <svg class="header-owl" viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
         <!-- body -->
@@ -366,22 +452,18 @@
 </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-import { getFirestore, collection, getDocs, doc, getDoc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
-
-// ══ FIREBASE CONFIG — замени на свой проект ══
-const firebaseConfig = {
-  apiKey: "AIzaSyD1uWPrp12lvpyBzXCOq9IrMuTU4uOTRao",
-  authDomain: "natas-kitchen.firebaseapp.com",
-  projectId: "natas-kitchen",
-  storageBucket: "natas-kitchen.firebasestorage.app",
-  messagingSenderId: "756908196325",
-  appId: "1:756908196325:web:e8bab3aac2a322f9436f0c"
-};
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+import { db, collection, getDocs, doc, getDoc, setDoc, deleteDoc } from './js/firebase.js';
+import {
+  initAuth, currentUid, currentUserName, currentUserEmail,
+  signInGoogle, signInEmail, registerEmail, signOutUser,
+  listMyNotebooks, ensureFirstNotebook, resolveActiveNotebook,
+  getActiveNotebookId, setActiveNotebookId, createNotebook, joinNotebookByCode,
+  renameNotebook, getNotebook,
+} from './js/store.js';
 
 // ── STATE ──
+let NB = null;              // id активного блокнота — скоуп всех путей к данным
+let myNotebooks = [];       // [{id, name, role}]
 let allTasks = [];
 let currentFilter = 'all';
 let currentActiveTab = null;
@@ -431,9 +513,9 @@ function buildTagMeta() {
 }
 async function loadTags() {
   try {
-    const snap = await getDoc(doc(db,'meta','tags'));
+    const snap = await getDoc(doc(db,'notebooks',NB,'meta','tags'));
     if (snap.exists()) { TAGS_CONFIG = snap.data(); }
-    else { await setDoc(doc(db,'meta','tags'), DEFAULT_TAGS); }
+    else { await setDoc(doc(db,'notebooks',NB,'meta','tags'), DEFAULT_TAGS); }
   } catch(e) { console.warn('loadTags failed, using defaults'); }
   buildTagMeta();
 }
@@ -449,7 +531,7 @@ function buildFilterTabs() {
 // ── LOAD ──
 async function loadTasks() {
   try {
-    const snap = await getDocs(collection(db, 'tasks'));
+    const snap = await getDocs(collection(db, 'notebooks', NB, 'tasks'));
     allTasks = snap.docs.map(d => {
       const t = {id: d.id, ...d.data()};
       // Read-time migration: old tasks used dueDate, now we use deadline
@@ -478,7 +560,170 @@ async function init() {
   loadTasks();
   loadWideContext();
 }
-init();
+
+// ── AUTH + NOTEBOOK BOOT ──
+async function boot() {
+  const user = await initAuth();
+  if (!user) { showAuthScreen(); return; }
+  await enterApp();
+}
+
+async function enterApp() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('loading').style.display = 'flex';
+  try {
+    await ensureFirstNotebook();               // создаёт первый блокнот + миграция legacy
+    myNotebooks = await listMyNotebooks();
+    NB = resolveActiveNotebook(myNotebooks);
+    if (!NB) { showAuthScreen('Не удалось открыть блокнот.'); return; }
+    updateNotebookUI();
+    await init();
+  } catch (e) {
+    console.error(e);
+    document.getElementById('loading').style.display = 'none';
+    showAuthScreen(authError(e));
+  }
+}
+
+function updateNotebookUI() {
+  const nb = myNotebooks.find(n => n.id === NB);
+  const nameEl = document.getElementById('nb-name');
+  if (nameEl) nameEl.textContent = nb?.name || 'Блокнот';
+  const avatar = document.getElementById('nb-avatar');
+  if (avatar) {
+    const name = currentUserName() || currentUserEmail() || '?';
+    avatar.textContent = name.trim().charAt(0).toUpperCase() || '?';
+  }
+}
+
+// Понятный текст по коду ошибки Firebase (Auth + Firestore).
+function authError(e) {
+  const code = e?.code || '';
+  const map = {
+    'auth/unauthorized-domain': 'Домен не разрешён: Firebase → Authentication → Settings → Authorized domains → добавь домен GitHub Pages.',
+    'auth/operation-not-allowed': 'Провайдер входа не включён: Firebase → Authentication → Sign-in method (включи Google и Email/Password).',
+    'auth/popup-blocked': 'Браузер заблокировал всплывающее окно. Разреши попапы и попробуй снова.',
+    'auth/popup-closed-by-user': 'Окно входа закрыли до завершения — попробуй ещё раз.',
+    'auth/invalid-api-key': 'Неверный apiKey в js/firebase.js.',
+    'auth/invalid-credential': 'Неверный email или пароль.',
+    'auth/wrong-password': 'Неверный пароль.',
+    'auth/user-not-found': 'Пользователь не найден — зарегистрируйся.',
+    'auth/email-already-in-use': 'Этот email уже зарегистрирован — войди.',
+    'auth/weak-password': 'Пароль слишком короткий (минимум 6 символов).',
+    'auth/network-request-failed': 'Сеть недоступна или запрос заблокирован.',
+    'permission-denied': 'Вход прошёл, но нет доступа к базе — задеплой firestore.rules.',
+  };
+  return map[code] || (typeof e === 'string' ? e : (e?.message || 'Ошибка. Попробуй ещё раз.'));
+}
+
+function showAuthScreen(msg) {
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('home').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+  if (msg) document.getElementById('auth-error').textContent = msg;
+}
+
+// ── Обработчики входа ──
+let authMode = 'signin'; // signin | register
+window.onGoogleSignIn = async function() {
+  document.getElementById('auth-error').textContent = '';
+  try {
+    const cred = await signInGoogle();
+    if (cred) await enterApp();   // null → ушли в redirect, вернёмся на boot()
+  } catch (e) { console.error(e); document.getElementById('auth-error').textContent = authError(e); }
+};
+window.onEmailSubmit = async function() {
+  const email = document.getElementById('auth-email').value.trim();
+  const pass = document.getElementById('auth-pass').value;
+  if (!email || !pass) { document.getElementById('auth-error').textContent = 'Введи email и пароль.'; return; }
+  document.getElementById('auth-error').textContent = '';
+  try {
+    if (authMode === 'signin') await signInEmail(email, pass);
+    else await registerEmail(email, pass);
+    await enterApp();
+  } catch (e) { console.error(e); document.getElementById('auth-error').textContent = authError(e); }
+};
+window.toggleAuthMode = function() {
+  authMode = authMode === 'signin' ? 'register' : 'signin';
+  document.getElementById('auth-submit').textContent = authMode === 'signin' ? 'Войти' : 'Зарегистрироваться';
+  document.getElementById('auth-toggle').textContent = authMode === 'signin'
+    ? 'Нет аккаунта? Зарегистрироваться' : 'Уже есть аккаунт? Войти';
+  document.getElementById('auth-error').textContent = '';
+};
+
+// ── Свитчер блокнотов ──
+window.openNotebookSwitcher = async function() {
+  myNotebooks = await listMyNotebooks();
+  renderNotebookList();
+  document.getElementById('nb-overlay').style.display = 'block';
+  document.getElementById('nb-sheet').classList.add('open');
+};
+window.closeNotebookSwitcher = function() {
+  document.getElementById('nb-overlay').style.display = 'none';
+  document.getElementById('nb-sheet').classList.remove('open');
+};
+function renderNotebookList() {
+  const list = document.getElementById('nb-list');
+  list.innerHTML = myNotebooks.map(n => `
+    <button class="nb-item ${n.id === NB ? 'active' : ''}" onclick="switchNotebook('${n.id}')">
+      <span class="nb-item-name">📒 ${escapeHtml(n.name || 'Блокнот')}</span>
+      <span class="nb-item-role">${n.role === 'owner' ? '👑' : ''}${n.id === NB ? ' ✓' : ''}</span>
+    </button>`).join('') || '<div style="color:var(--text-soft);font-size:13px;padding:8px 0;">Пока нет блокнотов</div>';
+}
+window.switchNotebook = async function(nid) {
+  if (nid === NB) { closeNotebookSwitcher(); return; }
+  setActiveNotebookId(nid);
+  NB = nid;
+  updateNotebookUI();
+  closeNotebookSwitcher();
+  document.getElementById('loading').style.display = 'flex';
+  allTasks = [];
+  await init();
+};
+window.createNotebookFromInput = async function() {
+  const input = document.getElementById('nb-new-name');
+  const name = input.value.trim();
+  if (!name) { input.focus(); return; }
+  input.value = '';
+  const nid = await createNotebook(name);
+  await switchNotebook(nid);
+};
+window.joinNotebookFromInput = async function() {
+  const input = document.getElementById('nb-join-code');
+  const code = input.value.trim();
+  if (!code) { input.focus(); return; }
+  const nid = await joinNotebookByCode(code);
+  if (!nid) { document.getElementById('nb-join-error').textContent = 'Блокнот с таким кодом не найден.'; return; }
+  input.value = '';
+  document.getElementById('nb-join-error').textContent = '';
+  await switchNotebook(nid);
+};
+window.renameActiveNotebook = async function() {
+  const nb = myNotebooks.find(n => n.id === NB);
+  const name = prompt('Новое название блокнота:', nb?.name || '');
+  if (!name || !name.trim()) return;
+  await renameNotebook(NB, name.trim());
+  myNotebooks = await listMyNotebooks();
+  updateNotebookUI();
+  renderNotebookList();
+};
+window.showNotebookCode = async function() {
+  const nb = await getNotebook(NB);
+  alert(nb?.joinCode
+    ? `Код приглашения в «${nb.name}»:\n\n${nb.joinCode}\n\nПередай его тому, кого хочешь пригласить в блокнот.`
+    : 'Код недоступен.');
+};
+window.doSignOut = async function() {
+  if (!confirm('Выйти из аккаунта?')) return;
+  await signOutUser();
+  location.reload();
+};
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+boot();
 
 // ── HEADER STATS ──
 function updateHeaderStats() {
@@ -661,7 +906,7 @@ window.quickSetToday = async function(taskId, btn) {
   btn.textContent = '✓ Set';
   btn.style.background = 'var(--lav-pale)';
   try {
-    await setDoc(doc(db,'tasks',taskId), t);
+    await setDoc(doc(db,'notebooks',NB,'tasks',taskId), t);
     updateHeaderStats();
     setTimeout(() => renderCards(), 600);
   } catch(e) { btn.textContent = '⚡'; }
@@ -688,15 +933,15 @@ window.quickMarkDone = async function(taskId, btn) {
         deadline: nextDue, nextAction: null,
         subtasks: (t.subtasks||[]).map(s => ({...s, status:'new'})),
         recurring: {...rec, nextDue}};
-      await setDoc(doc(db,'tasks',archiveId), archived);
-      await setDoc(doc(db,'tasks',taskId), rolled);
+      await setDoc(doc(db,'notebooks',NB,'tasks',archiveId), archived);
+      await setDoc(doc(db,'notebooks',NB,'tasks',taskId), rolled);
       allTasks.push(archived);
       const idx = allTasks.findIndex(x => x.id === taskId);
       if (idx >= 0) allTasks[idx] = rolled;
     } else {
       t.status = 'done';
       t.doneAt = new Date().toISOString();
-      await setDoc(doc(db,'tasks',taskId), t);
+      await setDoc(doc(db,'notebooks',NB,'tasks',taskId), t);
     }
     updateHeaderStats();
     setTimeout(() => renderCards(), 500);
@@ -789,7 +1034,7 @@ let tagContextCache = {};
 // Load user-level wide context (called once after tasks load)
 async function loadWideContext() {
   try {
-    const snap = await getDoc(doc(db, 'contexts', 'user'));
+    const snap = await getDoc(doc(db, 'notebooks', NB, 'contexts', 'user'));
     if (snap.exists()) wideContext = snap.data();
   } catch(e) {}
 }
@@ -798,7 +1043,7 @@ async function loadWideContext() {
 async function loadTagContext(tagId) {
   if (tagContextCache[tagId]) return tagContextCache[tagId];
   try {
-    const snap = await getDoc(doc(db, 'contexts', 'tag-' + tagId));
+    const snap = await getDoc(doc(db, 'notebooks', NB, 'contexts', 'tag-' + tagId));
     tagContextCache[tagId] = snap.exists() ? snap.data() : {};
   } catch(e) { tagContextCache[tagId] = {}; }
   return tagContextCache[tagId];
@@ -1027,7 +1272,7 @@ async function autoSummariseChat() {
     const existing = wideContext.chatSummary || '';
     const combined = (existing + dateLine).slice(-3200); // ~800 words
     wideContext.chatSummary = combined;
-    await setDoc(doc(db, 'contexts', 'user'),
+    await setDoc(doc(db, 'notebooks', NB, 'contexts', 'user'),
       {chatSummary: combined, updatedAt: new Date().toISOString()}, {merge:true});
 
     // Also save to tag-specific contexts if tags were detected
@@ -1036,7 +1281,7 @@ async function autoSummariseChat() {
       const tagExisting = tagCtx.chatSummary || '';
       const tagCombined = (tagExisting + dateLine).slice(-3200);
       tagContextCache[tagId] = {...tagCtx, chatSummary: tagCombined};
-      await setDoc(doc(db, 'contexts', 'tag-' + tagId),
+      await setDoc(doc(db, 'notebooks', NB, 'contexts', 'tag-' + tagId),
         {chatSummary: tagCombined, updatedAt: new Date().toISOString()}, {merge:true});
     }
   } catch(e) { /* silent fail — summary is nice-to-have */ }
@@ -1063,7 +1308,7 @@ async function updateTagTaskSummary(tags) {
 
       // Update cache and Firebase
       tagContextCache[tagId] = {...(tagContextCache[tagId]||{}), taskSummary: summary, summaryUpdatedAt: new Date().toISOString()};
-      await setDoc(doc(db, 'contexts', 'tag-' + tagId),
+      await setDoc(doc(db, 'notebooks', NB, 'contexts', 'tag-' + tagId),
         {taskSummary: summary, summaryUpdatedAt: new Date().toISOString()}, {merge:true});
     } catch(e) { /* silent */ }
   }
@@ -1121,7 +1366,7 @@ async function executeAction(action) {
         })),
         notes:'', createdAt:new Date().toISOString()
       };
-      await setDoc(doc(db,'tasks',id), task);
+      await setDoc(doc(db,'notebooks',NB,'tasks',id), task);
       allTasks.push(task);
       renderCards(); updateHeaderStats();
       // Update tag summaries in background
@@ -1136,7 +1381,7 @@ async function executeAction(action) {
         action.fields.doneAt = new Date().toISOString();
       }
       const updated = {...allTasks[idx], ...action.fields};
-      await setDoc(doc(db,'tasks',action.taskId), updated);
+      await setDoc(doc(db,'notebooks',NB,'tasks',action.taskId), updated);
       allTasks[idx] = updated;
       renderCards(); updateHeaderStats();
       if (updated.tags.length) updateTagTaskSummary(updated.tags);
@@ -1147,7 +1392,7 @@ async function executeAction(action) {
       const idx = allTasks.findIndex(t=>t.id===action.taskId);
       if (idx===-1) return {ok:false, msg:`❌ Task ${action.taskId} not found`};
       const title = allTasks[idx].title;
-      await deleteDoc(doc(db,'tasks',action.taskId));
+      await deleteDoc(doc(db,'notebooks',NB,'tasks',action.taskId));
       allTasks.splice(idx,1);
       renderCards(); updateHeaderStats();
       return {ok:true, msg:`🗑 Deleted: "${title}"`};
@@ -1161,7 +1406,7 @@ async function executeAction(action) {
         assigned:action.subtask.assigned||'',createdAt:new Date().toISOString()
       };
       allTasks[idx].subtasks = [...(allTasks[idx].subtasks||[]), sub];
-      await setDoc(doc(db,'tasks',action.taskId), allTasks[idx]);
+      await setDoc(doc(db,'notebooks',NB,'tasks',action.taskId), allTasks[idx]);
       if (allTasks[idx].tags.length) updateTagTaskSummary(allTasks[idx].tags);
       renderCards();
       return {ok:true, msg:`✅ Subtask added → "${allTasks[idx].title}"`};
@@ -1174,7 +1419,7 @@ async function executeAction(action) {
       if (si<0||si>=subs.length) return {ok:false, msg:`❌ Subtask ${si} not found`};
       subs[si] = {...subs[si],...action.fields};
       allTasks[idx].subtasks = subs;
-      await setDoc(doc(db,'tasks',action.taskId), allTasks[idx]);
+      await setDoc(doc(db,'notebooks',NB,'tasks',action.taskId), allTasks[idx]);
       renderCards();
       return {ok:true, msg:'✅ Subtask updated'};
     }
@@ -1430,8 +1675,8 @@ async function checkRecurringTasks() {
           createdAt: new Date().toISOString(),
           recurring: {...rec, nextDue: due}};
         const archived = {...t, recurring: null};
-        await setDoc(doc(db,'tasks',newId), revived);
-        await setDoc(doc(db,'tasks',t.id), archived);
+        await setDoc(doc(db,'notebooks',NB,'tasks',newId), revived);
+        await setDoc(doc(db,'notebooks',NB,'tasks',t.id), archived);
         allTasks.push(revived);
         const idx = allTasks.findIndex(x => x.id === t.id);
         if (idx >= 0) allTasks[idx] = archived;
@@ -1440,7 +1685,7 @@ async function checkRecurringTasks() {
         // Legacy active template whose occurrence was spawned separately:
         // align the task itself with the next occurrence date.
         const synced = {...t, deadline: rec.nextDue};
-        await setDoc(doc(db,'tasks',t.id), synced);
+        await setDoc(doc(db,'notebooks',NB,'tasks',t.id), synced);
         const idx = allTasks.findIndex(x => x.id === t.id);
         if (idx >= 0) allTasks[idx] = synced;
         changed = true;
@@ -1499,13 +1744,13 @@ window.openMonthlySuggestions = async function() {
     const tagCtxParts = [];
     for (const tagId of [...WORK_TAGS,...PERSONAL_TAGS]) {
       try {
-        const snap = await getDoc(doc(db,'contexts','tag-'+tagId));
+        const snap = await getDoc(doc(db,'notebooks',NB,'contexts','tag-'+tagId));
         if (snap.exists() && snap.data().profile) {
           tagCtxParts.push(`${TAG_META[tagId].label}: ${snap.data().profile}`);
         }
       } catch(e) {}
     }
-    const userSnap = await getDoc(doc(db,'contexts','user'));
+    const userSnap = await getDoc(doc(db,'notebooks',NB,'contexts','user'));
     const userProfile = userSnap.exists() ? (userSnap.data().profile||'') : '';
 
     const month = new Date().toLocaleString('en-US', {month:'long'});
@@ -1576,7 +1821,7 @@ window.acceptMonthlySuggestions = async function() {
     const task = {id, title:s.title, description:'', tags:s.tags||[],
       deadline:null, nextAction:null, priority:s.priority||'med', status:'new',
       subtasks:[], notes:'', createdAt:new Date().toISOString()};
-    await setDoc(doc(db,'tasks',id), task);
+    await setDoc(doc(db,'notebooks',NB,'tasks',id), task);
     allTasks.push(task);
   }
   renderCards(); updateHeaderStats();
@@ -1622,7 +1867,7 @@ window.closeNotifModal = function() {
 
 async function loadNotifSettings() {
   try {
-    const snap = await getDoc(doc(db, 'meta', 'notificationSettings'));
+    const snap = await getDoc(doc(db, 'notebooks', NB, 'meta', 'notificationSettings'));
     notifSettings = snap.exists() ? snap.data() : defaultNotifSettings();
   } catch(e) { notifSettings = defaultNotifSettings(); }
 }
@@ -1680,7 +1925,7 @@ async function saveNotifSettings() {
     };
   }
   notifSettings = s;
-  await setDoc(doc(db, 'meta', 'notificationSettings'), s);
+  await setDoc(doc(db, 'notebooks', NB, 'meta', 'notificationSettings'), s);
 }
 
 async function updateDevicePushBtn() {

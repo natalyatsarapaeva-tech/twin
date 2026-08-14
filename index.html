@@ -269,6 +269,7 @@
         <button class="tab active all" onclick="filterCards('all',this)">🏠 Active</button>
         <button class="tab" onclick="filterCards('no-date',this)">📅 No date</button>
         <button class="tab" onclick="filterCards('this-week',this)">📅 This week</button>
+        <button class="tab" onclick="filterCards('waiting',this)">⏳ Waiting</button>
         <button class="tab" onclick="filterCards('done-today',this)">✅ Done today</button>
         <button class="tab" onclick="filterCards('done',this)">📂 All completed</button>
       </div>
@@ -532,6 +533,7 @@ function getFiltered() {
     case 'this-week': { const nw = new Date(); nw.setDate(nw.getDate()+7); const nwStr=nw.toISOString().split('T')[0];
                         list = list.filter(t => { const d = t.nextAction || t.deadline; return t.status !== 'done' && d && d >= today && d <= nwStr; }); break; }
     case 'no-date':    list = list.filter(t => t.status !== 'done' && !t.deadline); break;
+    case 'waiting':    list = list.filter(t => t.status !== 'done' && (t.status === 'blocked' || (t.subtasks||[]).some(s => s.status === 'blocked'))); break;
     case 'done-today': list = list.filter(t => t.status === 'done' && t.doneAt && t.doneAt.startsWith(today)); break;
     case 'done':       list = list.filter(t => t.status === 'done'); break;
     case 'work':       list = list.filter(t => t.status !== 'done' && (t.tags||[]).some(tag => WORK_TAGS.includes(tag))); break;

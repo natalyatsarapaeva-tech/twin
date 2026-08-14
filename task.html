@@ -165,6 +165,8 @@
     .modal-select:focus{border-color:var(--lavender);}
     .modal-save{width:100%;padding:14px;border-radius:12px;background:var(--slate);color:var(--white);border:none;font-size:15px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:18px;}
     .modal-delete{width:100%;padding:12px;border-radius:12px;background:none;border:2px solid var(--red);color:var(--red);font-size:14px;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:8px;}
+    .modal-skip{width:100%;padding:12px;border-radius:12px;background:none;border:2px solid var(--border);color:var(--text-soft);font-size:14px;cursor:pointer;font-family:'DM Sans',sans-serif;margin-top:8px;}
+    .next-sub{font-size:13px;color:var(--text-soft);margin:0 0 4px;line-height:1.5;}
 
     /* DELETE TASK */
     .delete-btn{margin:16px 16px 0;padding:14px;background:none;border:2px solid var(--red);color:var(--red);border-radius:14px;width:calc(100% - 32px);font-size:14px;cursor:pointer;font-family:'DM Sans',sans-serif;}
@@ -303,16 +305,35 @@
     <label class="modal-label">Due date</label>
     <input class="modal-input" type="date" id="m-date"/>
     <label class="modal-label">Status</label>
-    <select class="modal-select" id="m-status">
+    <select class="modal-select" id="m-status" onchange="onModalStatusChange()">
       <option value="new">New</option>
       <option value="in-progress">In Progress</option>
       <option value="blocked">Blocked</option>
       <option value="done">Done</option>
     </select>
+    <label class="modal-label" id="m-waiting-label" style="display:none;">⏳ Waiting on (who / what)</label>
+    <input class="modal-input" id="m-waiting" placeholder="e.g. legal team, spouse, reply…" style="display:none;"/>
     <label class="modal-label">Assigned to</label>
     <input class="modal-input" id="m-assigned" placeholder="Name or email"/>
     <button class="modal-save" onclick="saveSubtaskModal()">💾 Save</button>
     <button class="modal-delete" onclick="deleteSubtaskModal()">🗑 Delete subtask</button>
+  </div>
+</div>
+
+<!-- NEXT ACTION (successor) MODAL -->
+<div class="modal-overlay" id="next-overlay" onclick="closeNextModal()"></div>
+<div class="modal" id="next-modal">
+  <div class="modal-handle"></div>
+  <div class="modal-header">
+    <div class="modal-title">What's the next action?</div>
+    <button class="modal-close" onclick="closeNextModal()">×</button>
+  </div>
+  <div class="modal-body">
+    <p class="next-sub" id="next-sub"></p>
+    <label class="modal-label">Next action</label>
+    <input class="modal-input" id="next-title" placeholder="e.g. Prepare sports kit for school"/>
+    <button class="modal-save" onclick="createNextAction()">＋ Create task</button>
+    <button class="modal-skip" onclick="closeNextModal()">Nothing follows — skip</button>
   </div>
 </div>
 
@@ -671,7 +692,8 @@ window.setStatus = async function(status, el) {
     toast(`✓ Done — next occurrence: ${fmtDate(next)}`);
     return;
   }
-  if (status === 'done' && task.status !== 'done') {
+  const justCompleted = status === 'done' && task.status !== 'done';
+  if (justCompleted) {
     task.doneAt = new Date().toISOString();
   }
   task.status = status;
@@ -680,6 +702,51 @@ window.setStatus = async function(status, el) {
   // Update tag summary in background
   if (task.tags && task.tags.length) triggerTagSummaryUpdate(task.tags);
   toast('Status updated');
+  // GTD: finishing a task often unlocks the next one — capture it now
+  if (justCompleted) openNextActionModal();
+}
+
+// ── NEXT ACTION (successor task) ──
+window.openNextActionModal = function() {
+  document.getElementById('next-sub').textContent =
+    `Finished “${task.title}”. Anything this unlocks?`;
+  document.getElementById('next-title').value = '';
+  document.getElementById('next-overlay').style.display = 'block';
+  setTimeout(() => {
+    document.getElementById('next-modal').classList.add('open');
+    const ti = document.getElementById('next-title');
+    ti.focus();
+    if (ti && !ti.closest('.voice-wrap')) attachVoiceBtn(ti);
+  }, 10);
+}
+
+window.closeNextModal = function() {
+  document.getElementById('next-modal').classList.remove('open');
+  document.getElementById('next-overlay').style.display = 'none';
+}
+
+window.createNextAction = async function() {
+  const title = document.getElementById('next-title').value.trim();
+  if (!title) { closeNextModal(); return; }
+  const id = 'task-' + Date.now() + '-' + Math.random().toString(36).slice(2,5);
+  const next = {
+    id, title,
+    description: '', notes: '', status: 'new', priority: 'none',
+    deadline: null, nextAction: null, doneAt: null,
+    tags: [...(task.tags || [])],           // inherit context from the finished task
+    primaryTag: task.primaryTag || null,
+    subtasks: [], subtaskMode: 'parallel',
+    recurring: null,
+    createdAt: new Date().toISOString(), source: null
+  };
+  try {
+    await setDoc(doc(db, 'tasks', id), next);
+    if (next.tags.length) triggerTagSummaryUpdate(next.tags);
+    closeNextModal();
+    toast('✓ Next action created');
+  } catch(e) {
+    toast('Could not create task');
+  }
 }
 
 // ── NOTES ──
@@ -768,8 +835,17 @@ window.openSubtaskModal = function(i) {
   document.getElementById('m-date').value = s.dueDate || '';
   document.getElementById('m-status').value = s.status || 'new';
   document.getElementById('m-assigned').value = s.assigned || '';
+  document.getElementById('m-waiting').value = s.waitingOn || '';
+  onModalStatusChange();
   document.getElementById('modal-overlay').style.display = 'block';
   setTimeout(() => document.getElementById('subtask-modal').classList.add('open'), 10);
+}
+
+// Show the "Waiting on" field only when the subtask is Blocked (GTD @Waiting For)
+window.onModalStatusChange = function() {
+  const blocked = document.getElementById('m-status').value === 'blocked';
+  document.getElementById('m-waiting-label').style.display = blocked ? 'block' : 'none';
+  document.getElementById('m-waiting').style.display = blocked ? 'block' : 'none';
 }
 
 window.closeModal = function() {
@@ -786,6 +862,9 @@ window.saveSubtaskModal = async function() {
   s.dueDate = document.getElementById('m-date').value || null;
   s.status = document.getElementById('m-status').value;
   s.assigned = document.getElementById('m-assigned').value.trim();
+  s.waitingOn = s.status === 'blocked'
+    ? (document.getElementById('m-waiting').value.trim() || null)
+    : null;
   await save();
   renderSubtasks();
   closeModal();

@@ -79,12 +79,14 @@ contexts/
   doneAt: "ISO timestamp|null",   // set when status → done
   tags: ["dev", "clients"],       // array of tag IDs
   primaryTag: "dev|null",         // used for mind map (no duplicates)
+  subtaskMode: "parallel|sequential", // GTD: how subtasks unlock (default parallel)
   subtasks: [{
     title: "string",
     note: "string",
     dueDate: "YYYY-MM-DD|null",
     status: "new|in-progress|blocked|done",
     assigned: "string",
+    waitingOn: "string|null",     // @Waiting For: who/what we wait on (only when blocked)
     createdAt: "ISO timestamp"
   }],
   recurring: {                    // null if not recurring
@@ -197,6 +199,30 @@ Shared utility — included via `<script src="voice.js">` in all HTML files.
   aligns stale `deadline` with `nextDue`
 - Recurring badge shown on card: `♻ weekly`
 - Repeat field available in: add-task.html form, task.html edit modal
+
+-----
+
+## Sequential tasks / next-action model (GTD)
+
+Full spec: `docs/sequential-tasks-spec.md`. Visual memo: `docs/gtd-memo.html`.
+Principle: the tracker surfaces the **next available action**, not the project title.
+
+- **`subtaskMode`** (`parallel` default | `sequential`) — how subtasks unlock:
+  - `parallel` → all non-done/non-blocked subtasks are available
+  - `sequential` → only the first non-done subtask; a `blocked` one stops the chain
+- **First available action** is computed, never stored: `firstAvailableSubtask()`
+  (index.html) / `firstAvailableIdx()` (task.html). index cards show its text
+  (`→ subtask`) instead of just the `nextAction` date; sequential tasks get a `▸ Seq` badge.
+- **@Waiting For** — a subtask with `status: "blocked"` + optional `waitingOn`. Not
+  counted as available; surfaced via the `⏳ Waiting` filter on index and a
+  `⏳ Waiting: {who}` line on card + subtask. The "Waiting on" field in the subtask
+  modal shows only when status = Blocked.
+- **Successor / эстафета** — completing a task (non-recurring, via `setStatus('done')`)
+  opens the "What's the next action?" modal → creates a new task inheriting tags /
+  primaryTag. Implements the GTD "what's the next action?" ritual for the case where
+  the next step only becomes clear on completion.
+- Toggle lives in task.html Subtasks header; `subtaskMode` persists via `save()` (setDoc).
+- Backward compatible: tasks without `subtaskMode` behave as `parallel`; `waitingOn` optional.
 
 -----
 

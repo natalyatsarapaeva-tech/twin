@@ -1,0 +1,291 @@
+<title>Следующее действие</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root{
+    --ground:#F4F6FC;
+    --surface:#FFFFFF;
+    --surface-2:#EEF1FA;
+    --ink:#2C3242;
+    --ink-soft:#5B6379;
+    --hair:#DFE3F0;
+    --lav:#6E5FC9;
+    --lav-soft:#EDEAFB;
+    --blue:#3F79E0;
+    --avail:#3C9E76;      /* доступно — делай сейчас */
+    --avail-bg:#E2F3EC;
+    --wait:#B8862E;       /* ожидание */
+    --wait-bg:#F7EED9;
+    --block:#C55B6A;      /* заблокировано порядком */
+    --block-bg:#F7E4E7;
+    --done:#9AA1B4;       /* сделано */
+  }
+  :root:not([data-theme="light"]){}
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --ground:#161923;
+      --surface:#1E222E;
+      --surface-2:#252A38;
+      --ink:#E7E9F2;
+      --ink-soft:#A2A9BD;
+      --hair:#333949;
+      --lav:#A89BF0;
+      --lav-soft:#2A2740;
+      --blue:#7BA6F5;
+      --avail:#5FC79A;
+      --avail-bg:#1E3A2E;
+      --wait:#E0B65E;
+      --wait-bg:#3A3016;
+      --block:#E58593;
+      --block-bg:#3B2126;
+      --done:#6B7285;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#161923;
+    --surface:#1E222E;
+    --surface-2:#252A38;
+    --ink:#E7E9F2;
+    --ink-soft:#A2A9BD;
+    --hair:#333949;
+    --lav:#A89BF0;
+    --lav-soft:#2A2740;
+    --blue:#7BA6F5;
+    --avail:#5FC79A;
+    --avail-bg:#1E3A2E;
+    --wait:#E0B65E;
+    --wait-bg:#3A3016;
+    --block:#E58593;
+    --block-bg:#3B2126;
+    --done:#6B7285;
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--ground);
+    color:var(--ink);
+    font-family:'DM Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+    line-height:1.62;
+    margin:0;
+    padding:40px 20px 72px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:760px;margin:0 auto;}
+
+  h1,h2,h3{font-family:'Spectral',Georgia,'Times New Roman',serif;font-weight:600;text-wrap:balance;line-height:1.2;}
+
+  /* ── HEADER ── */
+  header{margin-bottom:36px;}
+  .eyebrow{
+    font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--lav);font-weight:600;margin-bottom:12px;
+  }
+  h1{font-size:clamp(30px,6vw,42px);margin:0 0 14px;letter-spacing:-.01em;}
+  .lede{font-size:18px;color:var(--ink-soft);max-width:60ch;margin:0;}
+  .lede b{color:var(--ink);font-weight:600;}
+
+  /* ── SECTIONS ── */
+  section{margin-top:34px;}
+  .kicker{
+    display:flex;align-items:baseline;gap:10px;margin-bottom:14px;
+  }
+  .kicker .n{
+    font-family:'Spectral',Georgia,serif;font-size:14px;font-weight:600;
+    color:var(--lav);background:var(--lav-soft);
+    width:26px;height:26px;border-radius:8px;
+    display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;
+    font-variant-numeric:tabular-nums;
+  }
+  h2{font-size:21px;margin:0;}
+
+  p{margin:0 0 12px;}
+  p:last-child{margin-bottom:0;}
+  .muted{color:var(--ink-soft);}
+
+  .card{
+    background:var(--surface);border:1px solid var(--hair);
+    border-radius:16px;padding:20px 22px;
+    box-shadow:0 1px 2px rgba(44,50,66,.04);
+  }
+  .card + .card{margin-top:12px;}
+
+  .ex{
+    font-size:14px;color:var(--ink-soft);
+    border-left:3px solid var(--lav-soft);
+    padding:2px 0 2px 14px;margin-top:12px;
+  }
+  .ex b{color:var(--lav);font-weight:600;}
+  code{
+    font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    font-size:.86em;background:var(--surface-2);
+    padding:1px 6px;border-radius:6px;color:var(--ink);
+  }
+
+  /* ── DIAGRAM: sequential vs parallel ── */
+  .diagram{display:grid;grid-template-columns:1fr;gap:14px;margin-top:6px;}
+  @media(min-width:620px){.diagram{grid-template-columns:1fr 1fr;}}
+  .lane{
+    background:var(--surface);border:1px solid var(--hair);border-radius:16px;
+    padding:18px 18px 20px;
+  }
+  .lane h3{font-size:15px;margin:0 0 4px;display:flex;align-items:center;gap:8px;}
+  .lane .sub{font-size:13px;color:var(--ink-soft);margin:0 0 16px;}
+  .flow{display:flex;flex-direction:column;gap:8px;}
+  .step{
+    display:flex;align-items:center;gap:10px;
+    border-radius:11px;padding:10px 12px;font-size:14px;font-weight:500;
+    border:1px solid transparent;
+  }
+  .step .tick{
+    width:20px;height:20px;border-radius:6px;flex-shrink:0;
+    display:inline-flex;align-items:center;justify-content:center;
+    font-size:12px;font-weight:700;
+  }
+  .step.available{background:var(--avail-bg);border-color:var(--avail);color:var(--ink);}
+  .step.available .tick{background:var(--avail);color:#fff;}
+  .step.done{background:var(--surface-2);color:var(--done);text-decoration:line-through;}
+  .step.done .tick{background:var(--done);color:var(--surface);}
+  .step.blocked{background:var(--block-bg);color:var(--ink-soft);}
+  .step.blocked .tick{background:var(--block);color:#fff;}
+  .step.wait{background:var(--wait-bg);color:var(--ink-soft);}
+  .step.wait .tick{background:var(--wait);color:#fff;}
+  .step .tag{margin-left:auto;font-size:11px;font-weight:600;opacity:.8;letter-spacing:.02em;}
+
+  .connector{width:2px;height:8px;background:var(--hair);margin-left:22px;}
+
+  /* ── LEGEND ── */
+  .legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin-top:16px;font-size:12.5px;color:var(--ink-soft);}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .dot{width:11px;height:11px;border-radius:4px;flex-shrink:0;}
+  .dot.a{background:var(--avail);}
+  .dot.b{background:var(--block);}
+  .dot.w{background:var(--wait);}
+  .dot.d{background:var(--done);}
+
+  /* ── MAPPING TABLE ── */
+  .table-scroll{overflow-x:auto;border:1px solid var(--hair);border-radius:14px;}
+  table{border-collapse:collapse;width:100%;font-size:14px;min-width:520px;}
+  th,td{text-align:left;padding:12px 16px;border-bottom:1px solid var(--hair);vertical-align:top;}
+  th{font-family:'Spectral',Georgia,serif;font-weight:600;font-size:13px;color:var(--ink-soft);background:var(--surface-2);letter-spacing:.02em;}
+  tr:last-child td{border-bottom:none;}
+  td:first-child{font-weight:600;white-space:nowrap;}
+  td code{white-space:nowrap;}
+
+  /* ── CALLOUT ── */
+  .callout{
+    background:linear-gradient(180deg,var(--lav-soft),var(--surface));
+    border:1px solid var(--hair);border-radius:16px;padding:22px 24px;margin-top:34px;
+  }
+  .callout p{font-size:16px;}
+  .callout b{color:var(--lav);}
+
+  footer{margin-top:40px;padding-top:18px;border-top:1px solid var(--hair);font-size:13px;color:var(--ink-soft);}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">GTD-памятка · твой трекер задач</div>
+    <h1>Следующее действие</h1>
+    <p class="lede">Главный экран должен показывать не <b>проект</b>, а <b>ближайший физический шаг</b>. Всё остальное — механика того, как этот шаг вычислить, показать и передать эстафету дальше.</p>
+  </header>
+
+  <section>
+    <div class="kicker"><span class="n">1</span><h2>Проект ≠ действие</h2></div>
+    <div class="card">
+      <p><b>Проект</b> — любой результат, требующий больше одного шага. <b>Действие</b> — конкретный физический шаг, начинающийся с глагола. В GTD рабочий список состоит из <i>действий</i>; проекты живут отдельно и нужны для обзора, а не для ежедневной работы.</p>
+      <p class="ex"><b>«Получить ПМЖ в Швеции»</b> — это проект. На трекере вместо него должна светиться строка <b>«Заполнить заявление»</b> — первое доступное действие.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="kicker"><span class="n">2</span><h2>Первое доступное действие</h2></div>
+    <div class="card">
+      <p>Из всех подзадач ровно одна (или несколько) — «делай сейчас». Остальные либо сделаны, либо ждут своей очереди, либо ждут другого человека. Именно доступное действие выносится на карточку — крупно, с его собственным сроком.</p>
+      <p class="muted" style="margin-top:12px">Как выбирается «доступное» — зависит от режима подзадач ⤵</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="kicker"><span class="n">3</span><h2>Последовательные и параллельные</h2></div>
+    <p class="muted" style="margin:-4px 0 16px">Различие из OmniFocus — самое прямое решение твоих двух сценариев.</p>
+    <div class="diagram">
+      <div class="lane">
+        <h3>▸ Sequential</h3>
+        <p class="sub">Строгий порядок. Доступен только первый незавершённый шаг.</p>
+        <div class="flow">
+          <div class="step done"><span class="tick">✓</span> Написать ТЗ</div>
+          <div class="connector"></div>
+          <div class="step available"><span class="tick">→</span> Согласовать ТЗ<span class="tag">доступно</span></div>
+          <div class="connector"></div>
+          <div class="step blocked"><span class="tick">⏸</span> Поставить в разработку<span class="tag">ждёт очереди</span></div>
+        </div>
+      </div>
+      <div class="lane">
+        <h3>⇉ Parallel</h3>
+        <p class="sub">Любой порядок. Доступны все шаги сразу.</p>
+        <div class="flow">
+          <div class="step available"><span class="tick">→</span> Заполнить заявление<span class="tag">доступно</span></div>
+          <div class="connector"></div>
+          <div class="step wait"><span class="tick">⏳</span> Согласовать с профсоюзом<span class="tag">ждём ответа</span></div>
+          <div class="connector"></div>
+          <div class="step available"><span class="tick">→</span> Подобрать страховки<span class="tag">доступно</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="legend">
+      <span><span class="dot a"></span>доступно — делай сейчас</span>
+      <span><span class="dot b"></span>ждёт предыдущего (порядок)</span>
+      <span><span class="dot w"></span>Waiting — ждём человека</span>
+      <span><span class="dot d"></span>сделано</span>
+    </div>
+  </section>
+
+  <section>
+    <div class="kicker"><span class="n">4</span><h2>Waiting For — не «висит», а «ждёт»</h2></div>
+    <div class="card">
+      <p>«Согласовать с профсоюзом» — это <b>не твоё</b> действие: ты ждёшь другого человека. Такой шаг не должен мельтешить среди доступных, но и теряться не должен. В GTD это отдельный список <b>@Waiting&nbsp;For</b>.</p>
+      <p class="ex">В твоей схеме статус <code>blocked</code> уже есть — задействуй его как «ожидание» + поле <code>waitingOn</code> (кого ждём). Отдельный фильтр <b>⏳ Waiting</b> — и «зависших сто лет» дел больше нет: они честно помечены как ожидание.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="kicker"><span class="n">5</span><h2>«А что дальше?» — эстафета</h2></div>
+    <div class="card">
+      <p>Иногда следующий шаг рождается только в момент завершения предыдущего. Два случая:</p>
+      <p class="ex" style="border-color:var(--avail)"><b style="color:var(--avail)">Цепочка известна заранее</b> — «ТЗ → согласовать → в разработку». Просто заводи sequential-подзадачи сразу; всплывать будут по одной.</p>
+      <p class="ex"><b>Шаг ясен только в конце</b> — «прочла письмо из школы → <i>теперь понятно</i>, что надо готовить форму». Ритуал GTD: завершая шаг, спроси «а какой теперь следующий?» и запиши. В UI — мягкий промпт <b>«Следующее действие?»</b> при закрытии.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="kicker"><span class="n">6</span><h2>Еженедельный обзор</h2></div>
+    <div class="card">
+      <p>Механика осыпается без гигиены. Раз в неделю — пройтись по проектам и проверить один инвариант: <b>у каждого активного проекта есть живое доступное действие?</b> Если нет — оно либо в Waiting, либо в «когда-нибудь», либо надо придумать next action. Именно обзор ловит зависшие дела.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="kicker"><span class="n">↳</span><h2>Как это ложится на твою модель</h2></div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Понятие GTD</th><th>В твоём приложении</th></tr></thead>
+        <tbody>
+          <tr><td>Проект</td><td><code>task</code> с непустым <code>subtasks[]</code></td></tr>
+          <tr><td>Действие</td><td>подзадача (элемент <code>subtasks[]</code>)</td></tr>
+          <tr><td>Порядок шагов</td><td>новое поле <code>subtaskMode: "parallel" | "sequential"</code></td></tr>
+          <tr><td>Первое доступное</td><td>вычисляется, не хранится — <code>firstAvailableSubtask()</code></td></tr>
+          <tr><td>Waiting For</td><td>подзадача со <code>status: "blocked"</code> + <code>waitingOn</code></td></tr>
+          <tr><td>Эстафета (successor)</td><td><code>spawnOnDone</code> или промпт «Следующее действие?»</td></tr>
+          <tr><td>«Когда работать»</td><td>существующее <code>nextAction</code> (дата) — остаётся, ортогонально</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="callout">
+    <p style="margin:0"><b>Одной фразой.</b> Проблема не в механике, а в том, что на рабочем экране лежат проекты. Показывай <b>первое доступное действие</b> вместо названия проекта, добавь режим <b>sequential/parallel</b> для подзадач и используй <b>blocked как Waiting&nbsp;For</b> — и все три боли закрываются одним ядром.</p>
+  </div>
+
+  <footer>
+    Опорные методики: David Allen «Getting Things Done» (next actions, projects, @waiting for, weekly review) · модель sequential / parallel из OmniFocus. Памятка к ТЗ <code>docs/sequential-tasks-spec.md</code>.
+  </footer>
+</div>

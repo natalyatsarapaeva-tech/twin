@@ -61,6 +61,16 @@
     .stat-chip.muted{opacity:.45;}
     .stat-chip.stat-active{outline:2px solid rgba(255,255,255,.5);outline-offset:1px;}
     .card-next-action{font-size:11px;font-weight:500;padding:2px 7px;border-radius:6px;background:var(--lav-pale);color:var(--lavender);}
+    /* next-action: the actual next step surfaced on the card (GTD) */
+    .card-next-step{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:13px;font-weight:600;color:var(--slate);}
+    .card-next-step .cns-arrow{color:var(--lavender);flex-shrink:0;font-weight:700;}
+    .card-next-step .cns-text{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .card-next-step.waiting{color:var(--text-soft);font-weight:500;}
+    .card-next-step.waiting .cns-arrow{color:var(--amber);}
+    .card-next-step .cns-due{font-size:11px;font-weight:500;padding:1px 6px;border-radius:6px;background:var(--surface2);color:var(--text-soft);flex-shrink:0;}
+    .card-next-step .cns-due.overdue{background:#fde8e8;color:var(--red);}
+    .card-next-step .cns-due.today{background:#fff3cd;color:#a0742a;}
+    .card-mode-badge{font-size:10px;font-weight:700;letter-spacing:.03em;padding:2px 6px;border-radius:6px;background:var(--surface2);color:var(--text-soft);}
 
     .header-owl-row{display:flex;align-items:center;gap:16px;position:relative;z-index:1;}
     .header-owl{width:72px;height:72px;flex-shrink:0;filter:drop-shadow(0 4px 12px rgba(0,0,0,.2));}
@@ -551,6 +561,35 @@ function getFiltered() {
   return list;
 }
 
+// ── SUBTASK AVAILABILITY (GTD next-action model) ──
+// Returns { subtask, index } of the first *available* action, or null.
+// parallel  → any non-done / non-blocked subtask (earliest dueDate, then order)
+// sequential→ only the first non-done subtask (blocked one stops the chain)
+window.firstAvailableSubtask = function(task) {
+  const subs = task.subtasks || [];
+  if (!subs.length) return null;
+  const mode = task.subtaskMode || 'parallel';
+
+  if (mode === 'sequential') {
+    const idx = subs.findIndex(s => s.status !== 'done');
+    if (idx === -1) return null;                     // all done
+    if (subs[idx].status === 'blocked') return null; // waiting — nothing available
+    return { subtask: subs[idx], index: idx };
+  }
+
+  const candidates = subs
+    .map((s, i) => ({ s, i }))
+    .filter(x => x.s.status !== 'done' && x.s.status !== 'blocked');
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => {
+    const da = a.s.dueDate || '9999-99-99';
+    const db = b.s.dueDate || '9999-99-99';
+    if (da !== db) return da < db ? -1 : 1;
+    return a.i - b.i;
+  });
+  return { subtask: candidates[0].s, index: candidates[0].i };
+};
+
 // ── RENDER CARDS ──
 window.renderCards = function() {
   const grid = document.getElementById('cards-grid');
@@ -580,6 +619,30 @@ window.renderCards = function() {
       ? `<span class="card-next-action">→ ${t.nextAction === today ? 'Today' : fmtDate(t.nextAction)}</span>`
       : '';
 
+    // GTD: surface the actual next step (subtask text), not just the project title
+    const mode = t.subtaskMode || 'parallel';
+    let nextStepHtml = '';
+    if (!done && subtasks.length) {
+      const fa = firstAvailableSubtask(t);
+      if (fa) {
+        let cnsDue = '';
+        const d = fa.subtask.dueDate;
+        if (d) {
+          const cls = d < today ? 'overdue' : (d === today ? 'today' : '');
+          cnsDue = `<span class="cns-due ${cls}">${d === today ? 'Today' : fmtDate(d)}</span>`;
+        }
+        nextStepHtml = `<div class="card-next-step"><span class="cns-arrow">→</span><span class="cns-text">${escHtml(fa.subtask.title)}</span>${cnsDue}</div>`;
+      } else {
+        const waiting = subtasks.find(s => s.status === 'blocked');
+        if (waiting) {
+          const who = waiting.waitingOn ? ': ' + escHtml(waiting.waitingOn) : '';
+          nextStepHtml = `<div class="card-next-step waiting"><span class="cns-arrow">⏳</span><span class="cns-text">Waiting${who}</span></div>`;
+        }
+      }
+    }
+    const modeBadge = (!done && subtasks.length && mode === 'sequential')
+      ? `<span class="card-mode-badge">▸ Seq</span>` : '';
+
     const tags = (t.tags||[]).map(tag => {
       const m = TAG_META[tag];
       if (!m) return '';
@@ -596,10 +659,12 @@ window.renderCards = function() {
     card.innerHTML = `
       <div class="card-left">
         <div class="card-title${done?' done-text':''}">${escHtml(t.title)}</div>
+        ${nextStepHtml}
         <div class="card-meta-row">
           <span class="card-due ${dueClass}">${dueText}</span>
           ${nextActionHtml}
           ${subtasks.length ? `<span class="card-subtasks">📌 ${doneCount}/${subtasks.length} subtasks</span>` : ''}
+          ${modeBadge}
           ${t.recurring ? `<span style="font-size:11px;padding:2px 7px;border-radius:6px;background:var(--lav-pale);color:var(--lavender);font-weight:600;">♻ ${t.recurring.frequency}</span>` : ''}
         </div>
         ${tags ? `<div class="card-tag-list">${tags}</div>` : ''}

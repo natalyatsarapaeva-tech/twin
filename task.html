@@ -106,6 +106,22 @@
     .badge-blocked{background:var(--red-pale);color:var(--red);}
     .badge-done{background:var(--green-pale);color:var(--green);}
 
+    /* SUBTASK MODE TOGGLE (GTD sequential/parallel) */
+    .subtask-mode{display:none;gap:2px;background:var(--surface2);border-radius:10px;padding:3px;margin-bottom:14px;width:fit-content;}
+    .subtask-mode.show{display:inline-flex;}
+    .smode-opt{font-size:12px;font-weight:600;border:none;background:transparent;color:var(--text-soft);padding:5px 12px;border-radius:8px;cursor:pointer;transition:all .15s;}
+    .smode-opt.active{background:var(--white);color:var(--slate);box-shadow:0 1px 3px var(--shadow);}
+    .subtask-mode-hint{font-size:11px;color:var(--text-soft);margin:-8px 0 12px;display:none;}
+    .subtask-mode-hint.show{display:block;}
+
+    /* SUBTASK AVAILABILITY STATES */
+    .subtask-item.available{box-shadow:0 0 0 2px var(--green);}
+    .subtask-item.available::after{content:'→ next';position:absolute;top:10px;right:12px;font-size:10px;font-weight:700;color:var(--green);letter-spacing:.03em;}
+    .subtask-item.order-blocked{opacity:.55;}
+    .subtask-avail-note{font-size:11px;font-weight:600;margin-top:6px;}
+    .subtask-avail-note.wait{color:var(--amber);}
+    .subtask-avail-note.queued{color:var(--text-soft);}
+
     /* ADD SUBTASK */
     .add-subtask-form{background:var(--lav-pale);border-radius:12px;padding:14px;margin-top:10px;display:none;}
     .add-subtask-form.open{display:block;}
@@ -222,6 +238,11 @@
         📌 Subtasks
         <span class="section-action" onclick="toggleAddSubtask()">+ Add</span>
       </div>
+      <div class="subtask-mode" id="subtask-mode">
+        <button class="smode-opt" data-m="parallel" onclick="setSubtaskMode('parallel')">⇉ Parallel</button>
+        <button class="smode-opt" data-m="sequential" onclick="setSubtaskMode('sequential')">▸ Sequential</button>
+      </div>
+      <div class="subtask-mode-hint" id="subtask-mode-hint"></div>
       <div class="subtask-list" id="subtask-list"></div>
       <div class="add-subtask-form" id="add-subtask-form">
         <div class="form-row">
@@ -528,13 +549,67 @@ window.setPrimaryTag = async function(tag) {
   toast(task.primaryTag ? `★ Primary tag: ${TAG_META[tag]?.label}` : 'Primary tag cleared');
 }
 
+// ── SUBTASK AVAILABILITY (GTD next-action model) ──
+// parallel  → any non-done / non-blocked subtask is available
+// sequential→ only the first non-done subtask; blocked one stops the chain
+function firstAvailableIdx(t) {
+  const subs = t.subtasks || [];
+  if (!subs.length) return -1;
+  if ((t.subtaskMode || 'parallel') === 'sequential') {
+    const idx = subs.findIndex(s => s.status !== 'done');
+    if (idx === -1 || subs[idx].status === 'blocked') return -1;
+    return idx;
+  }
+  let best = -1, bestDue = '~';
+  subs.forEach((s, i) => {
+    if (s.status === 'done' || s.status === 'blocked') return;
+    const due = s.dueDate || '9999-99-99';
+    if (best === -1 || due < bestDue) { best = i; bestDue = due; }
+  });
+  return best;
+}
+// Indexes held back purely by sequential order (after the first pending one).
+function orderBlockedIdx(t) {
+  const set = new Set();
+  if ((t.subtaskMode || 'parallel') !== 'sequential') return set;
+  const subs = t.subtasks || [];
+  const first = subs.findIndex(s => s.status !== 'done');
+  if (first === -1) return set;
+  for (let i = first + 1; i < subs.length; i++) set.add(i);
+  return set;
+}
+
+window.setSubtaskMode = async function(mode) {
+  task.subtaskMode = mode;
+  renderSubtasks();
+  await save();
+};
+
 function renderSubtasks() {
   const list = document.getElementById('subtask-list');
   const today = todayStr();
+  const mode = task.subtaskMode || 'parallel';
+
+  // Mode toggle — only meaningful when there are subtasks
+  const modeBar = document.getElementById('subtask-mode');
+  const modeHint = document.getElementById('subtask-mode-hint');
+  const hasSubs = task.subtasks.length > 0;
+  modeBar.classList.toggle('show', hasSubs);
+  modeHint.classList.toggle('show', hasSubs);
+  modeBar.querySelectorAll('.smode-opt').forEach(b =>
+    b.classList.toggle('active', b.dataset.m === mode));
+  modeHint.textContent = mode === 'sequential'
+    ? 'One step at a time — only the first unfinished subtask is available.'
+    : 'Any order — all unfinished subtasks are available.';
+
   if (!task.subtasks.length) {
     list.innerHTML = '<div style="color:var(--text-soft);font-size:14px;text-align:center;padding:12px 0;">No subtasks yet</div>';
     return;
   }
+
+  const availIdx = firstAvailableIdx(task);
+  const blockedByOrder = orderBlockedIdx(task);
+
   list.innerHTML = task.subtasks.map((s, i) => {
     const done = s.status === 'done';
     let dateCls = 'normal', dateText = '';
@@ -545,7 +620,16 @@ function renderSubtasks() {
     }
     const badgeCls = {new:'badge-new','in-progress':'badge-in-progress',blocked:'badge-blocked',done:'badge-done'}[s.status]||'badge-new';
     const statusLabel = {new:'New','in-progress':'In Progress',blocked:'Blocked',done:'Done'}[s.status]||'New';
-    return `<div class="subtask-item fade-in" onclick="openSubtaskModal(${i})">
+
+    const isAvailable = i === availIdx;
+    const isQueued = blockedByOrder.has(i) && !done;
+    const isWaiting = s.status === 'blocked';
+    const itemCls = (isAvailable ? ' available' : '') + (isQueued ? ' order-blocked' : '');
+    let availNote = '';
+    if (isWaiting) availNote = `<div class="subtask-avail-note wait">⏳ Waiting${s.waitingOn?': '+escHtml(s.waitingOn):''}</div>`;
+    else if (isQueued) availNote = `<div class="subtask-avail-note queued">⏸ Waiting for previous step</div>`;
+
+    return `<div class="subtask-item fade-in${itemCls}" onclick="openSubtaskModal(${i})">
       <div class="subtask-header">
         <div class="subtask-check ${done?'done':''}" onclick="event.stopPropagation();toggleSubtaskDone(${i})">${done?'✓':''}</div>
         <div class="subtask-info">
@@ -555,6 +639,7 @@ function renderSubtasks() {
             ${dateText?`<span class="subtask-date ${dateCls}">📅 ${dateText}</span>`:''}
             ${s.assigned?`<span class="subtask-assigned">👤 ${escHtml(s.assigned)}</span>`:''}
           </div>
+          ${availNote}
           ${s.note?`<div class="subtask-note">${escHtml(s.note)}</div>`:''}
         </div>
       </div>

@@ -54,21 +54,26 @@ repo root/
 Every page imports `db` + Firestore helpers + `requireAuth`/`migrateIfOwner` from `./store.js`.
 **Auth:** Google sign-in via Firebase Auth. Each page gates its bootstrap on
 `requireAuth()` — signed-out users get a full-screen login gate; a sign-out chip
-shows top-right once in. Any Google account gets its own isolated store.
+shows top-right once in. Any Google account gets its own isolated store, all
+under the app namespace `apps/twin/` so Twin's data stays isolated from any
+sibling app sharing the `natas-kitchen` Firebase project.
 **OpenAI API key** stored in `localStorage('openai_api_key')` — user enters it in add-task.html.
 
 -----
 
 ## Firebase Firestore collections
 
-All app data is namespaced per user under `users/{uid}/`. The paths below are
-relative to that prefix — `store.js`'s wrapped `collection()`/`doc()` prepend
-`users/{uid}` automatically, so call sites still read `collection(db,'tasks')`.
+All app data is namespaced under a top-level **app namespace** `apps/twin/`
+(isolating Twin from other apps in the shared `natas-kitchen` project) and then
+per user. The paths below are relative to `apps/twin/users/{uid}/` —
+`store.js`'s wrapped `collection()`/`doc()` prepend that whole prefix
+automatically, so call sites still read `collection(db,'tasks')`. The namespace
+is one constant (`APP_ROOT` in `store.js`).
 (The Cloudflare Worker still writes the legacy **root** `tasks/` for now — see
 `docs/auth-setup.md`.)
 
 ```
-users/{uid}/
+apps/twin/users/{uid}/
 tasks/          — task documents
 contexts/
   user          — {profile, chatSummary, updatedAt}
@@ -370,7 +375,7 @@ Principle: the tracker surfaces the **next available action**, not the project t
 
 - Firebase Auth (Google login) ✅ — `store.js`, login gate on every page
 - Security rules per user ✅ — `firestore.rules` (deploy separately, see `docs/auth-setup.md`)
-- Per-user data isolation ✅ — all data under `users/{uid}/`; one-time owner migration
+- Per-user data isolation ✅ — all data under `apps/twin/users/{uid}/` (app namespace + per-user); one-time owner migration
 - Multi-user support ✅ — any Google account gets its own store
 - Worker → per-user writes (follow-up; still writes root `tasks/`)
 - Backend API (Cloudflare Workers as API layer)

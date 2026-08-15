@@ -17,12 +17,19 @@ Wave 8 productization: Google sign-in + isolated per-user Firestore stores.
 
 ## Data model
 
+Everything is rooted under a top-level **app namespace** (`apps/twin`) so Twin is
+isolated from any sibling app sharing the `natas-kitchen` Firebase project, then
+split per user:
+
 ```
-users/{uid}/
-  tasks/{id}            — was  tasks/{id}
-  contexts/{user|tag-X} — was  contexts/{...}
+apps/twin/users/{uid}/
+  tasks/{id}            — was root  tasks/{id}
+  contexts/{user|tag-X} — was root  contexts/{...}
   meta/{tags|notificationSettings|_migration}
 ```
+
+The namespace is a single constant (`APP_ROOT = ['apps','twin']`) at the top of
+`store.js` — change it there if the app is ever renamed/rehomed.
 
 ## One-time setup in the Firebase console (project `natas-kitchen`)
 
@@ -34,10 +41,10 @@ users/{uid}/
 ## Migration of the existing (owner) data
 
 Your current tasks live in the **root** `tasks/` `contexts/` `meta/` collections.
-`store.js` copies them into `users/{your-uid}/...` automatically, once, the first
-time the owner account (`natalya.tsarapaeva@gmail.com`) signs in. It's a copy —
-the root docs are left untouched — guarded by a `users/{uid}/meta/_migration`
-flag so it never runs twice.
+`store.js` copies them into `apps/twin/users/{your-uid}/...` automatically, once,
+the first time the owner account (`natalya.tsarapaeva@gmail.com`) signs in. It's a
+copy — the root docs are left untouched — guarded by an
+`apps/twin/users/{uid}/meta/_migration` flag so it never runs twice.
 
 **Order matters:**
 
@@ -56,8 +63,14 @@ firebase deploy --only firestore:rules
 ```
 
 or paste it into **Firestore → Rules** in the console. Each user can read/write
-only their own `users/{uid}` subtree; the legacy root is denied to all browser
-access.
+only their own `apps/twin/users/{uid}` subtree; everything else is denied by
+default.
+
+⚠️ A Firestore database has **one** ruleset for all collections. This file only
+governs `apps/twin/**`. If another app shares the `natas-kitchen` project and
+needs client access, **merge** its rules into the same file before deploying —
+don't let this file replace a broader ruleset, and don't add a catch-all deny
+(it would lock the sibling app out).
 
 ## Cloudflare Worker — still writes to the root (follow-up)
 
@@ -70,5 +83,5 @@ Follow-up to make it per-user:
 - add a `OWNER_UID` secret (your Firebase Auth uid) to the worker;
 - change the Firestore REST paths from `documents/tasks/{id}`,
   `documents/meta/tags`, `documents/pushSubscriptions/...` to
-  `documents/users/{OWNER_UID}/...`;
+  `documents/apps/twin/users/{OWNER_UID}/...`;
 - `wrangler deploy` from `worker/`.

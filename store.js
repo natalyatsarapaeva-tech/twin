@@ -1,14 +1,16 @@
 // store.js — Firebase init + Google auth gate + per-user Firestore namespacing.
 //
 // Imported as an ES module by every page. Replaces the per-file Firebase config
-// block. All app data now lives under  users/{uid}/...  so each signed-in Google
+// block. All app data lives under  apps/twin/users/{uid}/...  — a top-level
+// app namespace (APP_ROOT) so Twin is fully isolated inside the shared
+// `natas-kitchen` Firebase project, and then a per-user subtree so each Google
 // account gets its own isolated store.
 //
 // The trick: the pages keep calling collection(db,'tasks') / doc(db,'contexts','user')
 // as if data were at the root. The wrapped collection()/doc() exported here
-// transparently rewrite that to users/{uid}/... — so no call site in the pages
-// had to change. UID must be resolved (login done) before any of them run, which
-// requireAuth() guarantees by gating the page bootstrap.
+// transparently rewrite that to apps/twin/users/{uid}/... — so no call site in
+// the pages had to change. UID must be resolved (login done) before any of them
+// run, which requireAuth() guarantees by gating the page bootstrap.
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
 import {
@@ -35,6 +37,11 @@ const app  = initializeApp(firebaseConfig);
 const db   = getFirestore(app);
 const auth = getAuth(app);
 
+// Top-level namespace for THIS app inside the shared Firebase project. Every
+// path is rooted here, isolating Twin from any sibling app in `natas-kitchen`.
+// Change the second segment if you ever rename/rehome the app.
+const APP_ROOT = ['apps', 'twin'];
+
 // Owner of the legacy single-user data that lives at the Firestore root.
 // Only this account triggers the one-time migration into its per-user store.
 const OWNER_EMAIL = 'natalya.tsarapaeva@gmail.com';
@@ -45,12 +52,14 @@ function requireUid() {
   if (!UID) throw new Error('store: no authenticated user yet — call requireAuth() first');
   return UID;
 }
+// Full path prefix to the current user's store: apps/twin/users/{uid}
+function userRoot() { return [...APP_ROOT, 'users', requireUid()]; }
 
 // ── Per-user path namespacing ───────────────────────────────────────────────
 // Drop-in replacements for firestore's collection()/doc(): they prepend
-// users/{uid} to whatever path segments the caller passes.
-const collection = (dbArg, ...segs) => _collection(dbArg, 'users', requireUid(), ...segs);
-const doc        = (dbArg, ...segs) => _doc(dbArg, 'users', requireUid(), ...segs);
+// apps/twin/users/{uid} to whatever path segments the caller passes.
+const collection = (dbArg, ...segs) => _collection(dbArg, ...userRoot(), ...segs);
+const doc        = (dbArg, ...segs) => _doc(dbArg, ...userRoot(), ...segs);
 
 // ── Auth gate UI ────────────────────────────────────────────────────────────
 const GOOGLE_G = '<svg class="ag-g" viewBox="0 0 48 48" aria-hidden="true">'
@@ -173,13 +182,15 @@ function requireAuth() {
 }
 
 // ── One-time migration of legacy root data into the owner's per-user store ────
-// Copies root  tasks/  contexts/  meta/  documents to users/{uid}/... the first
-// time the owner signs in. Copy (not move): the root docs are left untouched.
-// Runs before the page loads data, guarded by a flag doc so it only happens once.
+// Copies root  tasks/  contexts/  meta/  documents to apps/twin/users/{uid}/...
+// the first time the owner signs in. Copy (not move): the root docs are left
+// untouched. Runs before the page loads data, guarded by a flag doc so it only
+// happens once.
 async function migrateIfOwner(user) {
   try {
     if (!user || user.email !== OWNER_EMAIL) return user;
-    const flagRef = _doc(db, 'users', user.uid, 'meta', '_migration');
+    const dest = [...APP_ROOT, 'users', user.uid];
+    const flagRef = _doc(db, ...dest, 'meta', '_migration');
     const flag = await getDoc(flagRef);
     if (flag.exists()) return user;
     let copied = 0;
@@ -187,12 +198,12 @@ async function migrateIfOwner(user) {
       const snap = await getDocs(_collection(db, col));
       for (const d of snap.docs) {
         if (col === 'meta' && d.id === '_migration') continue;
-        await setDoc(_doc(db, 'users', user.uid, col, d.id), d.data());
+        await setDoc(_doc(db, ...dest, col, d.id), d.data());
         copied++;
       }
     }
     await setDoc(flagRef, { migratedAt: new Date().toISOString(), source: 'root', copied });
-    console.info(`store: migrated ${copied} legacy root docs into users/${user.uid}`);
+    console.info(`store: migrated ${copied} legacy root docs into ${dest.join('/')}`);
   } catch (e) {
     // Non-fatal: app still works, migration can be retried on next load.
     console.warn('store: migration skipped —', e.message);

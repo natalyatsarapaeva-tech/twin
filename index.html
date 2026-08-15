@@ -98,6 +98,10 @@
     .sort-row{display:flex;align-items:center;justify-content:space-between;padding:12px 20px 6px;}
     .sort-label{font-size:12px;color:var(--text-soft);}
     .sort-btn{background:none;border:none;font-size:12px;color:var(--blue);font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;}
+    .sort-left{display:flex;align-items:center;gap:4px;}
+    .sort-select{font-size:12px;color:var(--text-soft);background:none;border:none;font-family:'DM Sans',sans-serif;font-weight:600;cursor:pointer;padding:2px 2px;border-radius:6px;}
+    .sort-select:focus{outline:none;}
+    .sort-dir{background:none;border:none;font-size:14px;color:var(--blue);font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;padding:2px 6px;border-radius:6px;line-height:1;}
 
     /* ── CARDS ── */
     .cards-grid{padding:8px 20px 120px;display:flex;flex-direction:column;gap:10px;flex:1;}
@@ -311,10 +315,17 @@
   </div>
 
   <div class="sort-row">
-    <span class="sort-label" id="sort-label">By next action ↑</span>
+    <div class="sort-left">
+      <span class="sort-label">Sort:</span>
+      <select class="sort-select" id="sort-mode" onchange="onSortModeChange()">
+        <option value="nextAction">By next action</option>
+        <option value="deadline">By deadline</option>
+        <option value="age">By age</option>
+      </select>
+      <button class="sort-dir" id="sort-dir" onclick="toggleSort()" title="Toggle direction (earliest/oldest ↔ latest/newest)">↑</button>
+    </div>
     <div style="display:flex;gap:10px;align-items:center;">
       <button class="sort-btn" id="monthly-btn" onclick="openMonthlySuggestions()" style="color:var(--lavender);">✨ This month</button>
-      <button class="sort-btn" onclick="toggleSort()">↕ Sort</button>
     </div>
   </div>
   <!-- Monthly suggestions panel -->
@@ -436,6 +447,7 @@ let currentFilter = 'all';
 let currentActiveTab = null;
 let searchQuery = '';
 let sortAsc = true;
+let sortMode = 'nextAction';   // 'nextAction' | 'deadline' | 'age'
 window.db = db;
 
 // ── WORKER ──
@@ -597,11 +609,19 @@ function getFiltered() {
     });
   }
 
-  // Sort
+  // Sort — by chosen field, direction via sortAsc
   list.sort((a,b) => {
-    const da = a.nextAction || a.deadline || '9999-99-99';
-    const db2 = b.nextAction || b.deadline || '9999-99-99';
-    return sortAsc ? da.localeCompare(db2) : db2.localeCompare(da);
+    let cmp;
+    if (sortMode === 'age') {                       // createdAt: asc = oldest first
+      cmp = (a.createdAt || '').localeCompare(b.createdAt || '');
+    } else if (sortMode === 'deadline') {           // hard deadline; undated sink to bottom
+      cmp = (a.deadline || '9999-99-99').localeCompare(b.deadline || '9999-99-99');
+    } else {                                        // nextAction (fallback deadline)
+      const da = a.nextAction || a.deadline || '9999-99-99';
+      const db2 = b.nextAction || b.deadline || '9999-99-99';
+      cmp = da.localeCompare(db2);
+    }
+    return sortAsc ? cmp : -cmp;
   });
 
   return list;
@@ -966,9 +986,14 @@ function restoreSavedFilter() {
   });
 }
 
+window.onSortModeChange = function() {
+  sortMode = document.getElementById('sort-mode').value;
+  renderCards();
+}
+
 window.toggleSort = function() {
   sortAsc = !sortAsc;
-  document.getElementById('sort-label').textContent = sortAsc ? 'By next action ↑' : 'By next action ↓';
+  document.getElementById('sort-dir').textContent = sortAsc ? '↑' : '↓';
   renderCards();
 }
 

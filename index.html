@@ -37,7 +37,7 @@
       /* EXPERIMENT: gray card shades (work / personal / neutral) */
       --exp-bg:            #fafbfd;  /* page: near-white */
       --card-work:         #e9edf5;  /* gray, cool/blue hint (work) */
-      --card-personal:     #e9f1ec;  /* gray, green hint (personal) */
+      --card-personal:     #ffffff;  /* white (personal) */
       --card-neutral:      #eef1f5;  /* gray, no group */
     }
     *{margin:0;padding:0;box-sizing:border-box;}
@@ -46,7 +46,7 @@
        Roll back instantly by removing class "exp-tint" from <body>; the group
        classes on cards are inert without it. ── */
     body.exp-tint{background:var(--exp-bg);}
-    body.exp-tint .task-card{background:var(--card-neutral);}
+    body.exp-tint .task-card{background:var(--card-neutral);box-shadow:0 4px 16px rgba(61,90,122,0.18);}
     body.exp-tint .task-card.grp-work{background:var(--card-work);}
     body.exp-tint .task-card.grp-personal{background:var(--card-personal);}
 

@@ -132,6 +132,10 @@
     .card-arrow{color:var(--blue-light);font-size:18px;}
     .card-status-dot{width:10px;height:10px;border-radius:50%;}
     .card-quick-actions{display:flex;gap:4px;}
+    /* task quick-actions relocated to a left-aligned row at the card bottom
+       (keeps them clear of the floating action buttons on the right) */
+    .card-actions-row{margin-top:12px;gap:8px;justify-content:flex-start;}
+    .card-actions-row .card-quick-btn{width:38px;height:30px;}
     .card-quick-btn{width:28px;height:28px;border-radius:8px;font-size:13px;font-weight:700;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .15s,opacity .15s;padding:0;}
     .card-quick-btn:active{transform:scale(.88);}
     .cqb-today{background:#fff3cd;color:#a0742a;}
@@ -701,14 +705,14 @@ window.renderCards = function() {
           ${t.recurring ? `<span style="font-size:11px;padding:2px 7px;border-radius:6px;background:var(--lav-pale);color:var(--lavender);font-weight:600;">♻ ${t.recurring.frequency}</span>` : ''}
         </div>
         ${tags ? `<div class="card-tag-list">${tags}</div>` : ''}
-      </div>
-      <div class="card-right">
-        ${!done ? `<div class="card-quick-actions" style="flex-direction:column;align-items:flex-end;margin-bottom:4px;">
-          <button class="card-quick-btn cqb-today" onclick="event.stopPropagation();quickSetToday('${t.id}',this)" style="margin-bottom:4px;" title="Plan for today">⚡</button>
-          <button class="card-quick-btn cqb-done" onclick="event.stopPropagation();quickMarkDone('${t.id}',this)" style="margin-bottom:4px;" title="Mark done">✓</button>
+        ${!done ? `<div class="card-quick-actions card-actions-row">
+          <button class="card-quick-btn cqb-today" onclick="event.stopPropagation();quickSetToday('${t.id}',this)" title="Plan for today">⚡</button>
+          <button class="card-quick-btn cqb-done" onclick="event.stopPropagation();quickMarkDone('${t.id}',this)" title="Mark done">✓</button>
           <button class="card-quick-btn cqb-done-next" onclick="event.stopPropagation();quickDoneAndNext('${t.id}',this)" title="Done + add next action">✓→</button>
         </div>` : ''}
-        <div class="card-status-dot ${statusDotClass}" style="margin-top:4px;"></div>
+      </div>
+      <div class="card-right">
+        <div class="card-status-dot ${statusDotClass}"></div>
         <span class="card-arrow">›</span>
       </div>`;
     card.onclick = () => {

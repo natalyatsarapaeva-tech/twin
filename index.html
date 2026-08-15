@@ -110,10 +110,11 @@
     .task-card{background:var(--white);border-radius:16px;padding:16px 16px 16px 20px;display:flex;align-items:flex-start;gap:12px;box-shadow:0 2px 12px var(--shadow);cursor:pointer;transition:transform .2s,box-shadow .2s;position:relative;overflow:hidden;border:none;width:100%;text-align:left;}
     .task-card:active{transform:scale(.98);}
     .task-card::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;border-radius:16px 0 0 16px;}
+    /* left stripe: red only for high priority; nothing for the rest */
     .task-card.priority-high::before{background:var(--red);}
-    .task-card.priority-med::before{background:var(--amber);}
-    .task-card.priority-low::before{background:var(--green);}
-    .task-card.priority-none::before{background:var(--border);}
+    .task-card.priority-med::before,
+    .task-card.priority-low::before,
+    .task-card.priority-none::before{background:transparent;}
     .task-card.done-card{opacity:.6;}
 
     .card-left{flex:1;min-width:0;}
@@ -320,6 +321,7 @@
       <select class="sort-select" id="sort-mode" onchange="onSortModeChange()">
         <option value="nextAction">By next action</option>
         <option value="deadline">By deadline</option>
+        <option value="priority">By priority</option>
         <option value="age">By age</option>
       </select>
       <button class="sort-dir" id="sort-dir" onclick="toggleSort()" title="Toggle direction (earliest/oldest ↔ latest/newest)">↑</button>
@@ -614,6 +616,9 @@ function getFiltered() {
     let cmp;
     if (sortMode === 'age') {                       // createdAt: asc = oldest first
       cmp = (a.createdAt || '').localeCompare(b.createdAt || '');
+    } else if (sortMode === 'priority') {           // asc(↑) = highest first
+      const rank = {high:0, med:1, low:2, none:3};
+      cmp = (rank[a.priority] ?? 3) - (rank[b.priority] ?? 3);
     } else if (sortMode === 'deadline') {           // hard deadline; undated sink to bottom
       cmp = (a.deadline || '9999-99-99').localeCompare(b.deadline || '9999-99-99');
     } else {                                        // nextAction (fallback deadline)

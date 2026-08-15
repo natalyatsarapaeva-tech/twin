@@ -70,7 +70,6 @@
     .card-next-step .cns-due{font-size:11px;font-weight:500;padding:1px 6px;border-radius:6px;background:var(--surface2);color:var(--text-soft);flex-shrink:0;}
     .card-next-step .cns-due.overdue{background:#fde8e8;color:var(--red);}
     .card-next-step .cns-due.today{background:#fff3cd;color:#a0742a;}
-    .card-mode-badge{font-size:10px;font-weight:700;letter-spacing:.03em;padding:2px 6px;border-radius:6px;background:var(--surface2);color:var(--text-soft);}
 
     .header-owl-row{display:flex;align-items:center;gap:16px;position:relative;z-index:1;}
     .header-owl{width:72px;height:72px;flex-shrink:0;filter:drop-shadow(0 4px 12px rgba(0,0,0,.2));}
@@ -695,7 +694,6 @@ window.renderCards = function() {
       : '';
 
     // GTD: surface the actual next step (subtask text), not just the project title
-    const mode = t.subtaskMode || 'parallel';
     let nextStepHtml = '';
     if (!done && subtasks.length) {
       const fa = firstAvailableSubtask(t);
@@ -715,9 +713,6 @@ window.renderCards = function() {
         }
       }
     }
-    const modeBadge = (!done && subtasks.length && mode === 'sequential')
-      ? `<span class="card-mode-badge">▸ Seq</span>` : '';
-
     const tags = (t.tags||[]).map(tag => {
       const m = TAG_META[tag];
       if (!m) return '';
@@ -735,10 +730,9 @@ window.renderCards = function() {
       <div class="card-left">
         <div class="card-title${done?' done-text':''}">${escHtml(t.title)}</div>
         ${nextStepHtml}
-        ${(t.deadline || subtasks.length || modeBadge) ? `<div class="card-meta-row">
+        ${(t.deadline || subtasks.length) ? `<div class="card-meta-row">
           ${deadlineHtml}
           ${subtasks.length ? `<span class="card-subtasks">📌 ${doneCount}/${subtasks.length} subtasks</span>` : ''}
-          ${modeBadge}
         </div>` : ''}
         ${(tags || recurringBadge) ? `<div class="card-tag-list">${tags}${recurringBadge}</div>` : ''}
         ${!done ? `<div class="card-quick-actions card-actions-row">

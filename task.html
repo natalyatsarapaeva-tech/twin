@@ -509,8 +509,10 @@ function render() {
     else if (task.deadline === today) cls += ' today';
     chips += `<span class="meta-chip ${cls}">📅 ${fmtDate(task.deadline)}</span>`;
   }
-  if (task.nextAction) {
-    chips += `<span class="meta-chip chip-due" style="background:rgba(139,159,212,.2);color:var(--blue-pale);">→ ${task.nextAction === today ? 'Today' : fmtDate(task.nextAction)}</span>`;
+  // Next action: pull the earliest dated *pending subtask*, not the synthetic nextAction field
+  const nextDated = deriveNextAction(task);
+  if (nextDated) {
+    chips += `<span class="meta-chip chip-due" style="background:rgba(139,159,212,.2);color:var(--blue-pale);">→ ${nextDated === today ? 'Today' : fmtDate(nextDated)}</span>`;
   }
   if (task.priority && task.priority !== 'none') {
     const pLabels = {high:'🔴 High',med:'🟡 Medium',low:'🟢 Low'};

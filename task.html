@@ -365,8 +365,6 @@
     <input class="modal-input" id="edit-title"/>
     <label class="modal-label">Deadline</label>
     <input class="modal-input" type="date" id="edit-due"/>
-    <label class="modal-label">Next action date</label>
-    <input class="modal-input" type="date" id="edit-next-action"/>
     <label class="modal-label">Priority</label>
     <select class="modal-select" id="edit-priority">
       <option value="none">No priority</option>
@@ -900,7 +898,6 @@ window.toggleEditRepeatInterval = function() {
 window.openEditModal = function() {
   document.getElementById('edit-title').value = task.title || '';
   document.getElementById('edit-due').value = task.deadline || '';
-  document.getElementById('edit-next-action').value = task.nextAction || deriveNextAction(task);
   document.getElementById('edit-priority').value = task.priority || 'none';
   // Populate repeat
   const rec = task.recurring || {};
@@ -937,7 +934,7 @@ window.closeEditModal = function() {
 window.saveEditModal = async function() {
   task.title = document.getElementById('edit-title').value.trim();
   task.deadline = document.getElementById('edit-due').value || null;
-  task.nextAction = document.getElementById('edit-next-action').value || deriveNextAction(task) || null;
+  task.nextAction = deriveNextAction(task) || null;   // derived from dated subtasks, no manual field
   task.priority = document.getElementById('edit-priority').value;
   // Save recurring
   const repFreq = document.getElementById('edit-repeat')?.value || '';

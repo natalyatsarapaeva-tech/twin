@@ -25,6 +25,9 @@ repo root/
 ├── mindmap.html        — mind map view: tags → tasks → subtasks, split-screen detail
 ├── context.html        — wide context page: user profile + per-tag AI context/summaries
 ├── voice.js            — shared voice input utility (Web Speech API, EN/RU toggle)
+├── store.js            — shared Firebase init + Google auth gate + per-user Firestore namespacing
+├── firestore.rules     — per-user security rules (deploy separately)
+├── docs/auth-setup.md  — auth & migration setup guide
 ├── CLAUDE.md           — this file
 └── worker/
     ├── task-intake-worker.js   — Cloudflare Worker: email + Slack → GPT → Firebase
@@ -44,17 +47,28 @@ repo root/
 |Deep research      |Multi-step GPT agent (3 sequential calls)    |
 |Voice input        |Web Speech API (browser-native, no API key)  |
 |Inbound email/Slack|Cloudflare Worker → Postmark webhook         |
-|Auth               |None yet (single user, Firebase in test mode)|
+|Auth               |Firebase Auth (Google sign-in), per-user stores under `users/{uid}/` |
 
 **Firebase project:** `natas-kitchen`
-**Firebase config** is in each HTML file — same config block in all 4 files.
+**Firebase config** lives once in `store.js` (was duplicated across the HTML files).
+Every page imports `db` + Firestore helpers + `requireAuth`/`migrateIfOwner` from `./store.js`.
+**Auth:** Google sign-in via Firebase Auth. Each page gates its bootstrap on
+`requireAuth()` — signed-out users get a full-screen login gate; a sign-out chip
+shows top-right once in. Any Google account gets its own isolated store.
 **OpenAI API key** stored in `localStorage('openai_api_key')` — user enters it in add-task.html.
 
 -----
 
 ## Firebase Firestore collections
 
+All app data is namespaced per user under `users/{uid}/`. The paths below are
+relative to that prefix — `store.js`'s wrapped `collection()`/`doc()` prepend
+`users/{uid}` automatically, so call sites still read `collection(db,'tasks')`.
+(The Cloudflare Worker still writes the legacy **root** `tasks/` for now — see
+`docs/auth-setup.md`.)
+
 ```
+users/{uid}/
 tasks/          — task documents
 contexts/
   user          — {profile, chatSummary, updatedAt}
@@ -354,10 +368,12 @@ Principle: the tracker surfaces the **next available action**, not the project t
 
 ### Wave 8 — Productization
 
-- Firebase Auth (Google login)
-- Security rules per user
+- Firebase Auth (Google login) ✅ — `store.js`, login gate on every page
+- Security rules per user ✅ — `firestore.rules` (deploy separately, see `docs/auth-setup.md`)
+- Per-user data isolation ✅ — all data under `users/{uid}/`; one-time owner migration
+- Multi-user support ✅ — any Google account gets its own store
+- Worker → per-user writes (follow-up; still writes root `tasks/`)
 - Backend API (Cloudflare Workers as API layer)
-- Multi-user support
 
 ### Wave 9 — Week planner
 

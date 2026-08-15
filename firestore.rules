@@ -1,0 +1,28 @@
+rules_version = '2';
+
+// Per-user isolation for the Twin task manager.
+// Data model: everything lives under  users/{uid}/{tasks|contexts|meta}/...
+// A signed-in Google user may read/write ONLY their own users/{uid} subtree.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Each user's private store.
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Legacy root collections (tasks/, contexts/, meta/, pushSubscriptions/)
+    // from the pre-auth single-user era. Denied to all client SDK access — the
+    // browser app no longer touches the root. The Cloudflare Worker still reads
+    // and writes these via the Firebase Admin service account, which bypasses
+    // security rules entirely, so intake keeps working until the worker is
+    // migrated to write per-user (users/{OWNER_UID}/...).
+    //
+    // NOTE: deploy these rules only AFTER the owner has signed in once and the
+    // one-time migration (store.js migrateIfOwner) has copied root -> per-user.
+    // That migration reads the root from the browser, which this block blocks.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

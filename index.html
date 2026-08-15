@@ -139,8 +139,17 @@
     .card-quick-btn{width:28px;height:28px;border-radius:8px;font-size:13px;font-weight:700;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .15s,opacity .15s;padding:0;}
     .card-quick-btn:active{transform:scale(.88);}
     .cqb-today{background:#fff3cd;color:#a0742a;}
+    .cqb-week{background:#e8f4fd;color:var(--blue);font-size:12px;}
     .cqb-done{background:var(--green-pale);color:#2d6e52;}
     .cqb-done-next{background:var(--lav-pale);color:var(--lavender);font-size:12px;}
+    /* deadline shown as a wide, tappable field → opens Google Calendar */
+    .card-due-gcal{display:inline-flex;align-items:center;justify-content:space-between;gap:6px;min-width:132px;font-size:12px;font-weight:500;padding:5px 10px;border-radius:8px;cursor:pointer;}
+    .card-due-gcal .cdg-ico{opacity:.6;font-size:12px;}
+    .card-due-gcal.overdue{background:#fde8e8;color:var(--red);}
+    .card-due-gcal.today{background:#fff3cd;color:#a0742a;}
+    .card-due-gcal.soon{background:#e8f4fd;color:var(--blue);}
+    .card-due-gcal.normal{background:var(--surface2);color:var(--text-soft);}
+    .card-tag.recurring-badge{background:var(--lav-pale);color:var(--lavender);}
     /* next-action (successor) quick modal */
     .na-modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-46%) scale(.96);opacity:0;pointer-events:none;z-index:210;width:min(420px,92vw);background:var(--white);border-radius:18px;box-shadow:0 12px 40px rgba(30,45,61,.25);padding:22px;transition:opacity .2s,transform .2s;}
     .na-modal.open{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto;}
@@ -652,8 +661,12 @@ window.renderCards = function() {
       else if (daysDiff(today, t.deadline) <= 3) { dueClass='soon'; dueText='📅 ' + fmtDate(t.deadline); }
       else { dueClass='normal'; dueText='📅 ' + fmtDate(t.deadline); }
     }
-    const nextActionHtml = t.nextAction
-      ? `<span class="card-next-action">→ ${t.nextAction === today ? 'Today' : fmtDate(t.nextAction)}</span>`
+    // Deadline: only when set; wide tappable field that opens Google Calendar
+    const deadlineHtml = t.deadline
+      ? `<div class="card-due-gcal ${dueClass}" onclick="event.stopPropagation();openGCal('${t.id}')" title="Add to Google Calendar"><span class="cdg-text">${dueText}</span><span class="cdg-ico">📆</span></div>`
+      : '';
+    const recurringBadge = t.recurring
+      ? `<span class="card-tag recurring-badge">♻ ${t.recurring.frequency}</span>`
       : '';
 
     // GTD: surface the actual next step (subtask text), not just the project title
@@ -697,16 +710,15 @@ window.renderCards = function() {
       <div class="card-left">
         <div class="card-title${done?' done-text':''}">${escHtml(t.title)}</div>
         ${nextStepHtml}
-        <div class="card-meta-row">
-          <span class="card-due ${dueClass}">${dueText}</span>
-          ${nextActionHtml}
+        ${(t.deadline || subtasks.length || modeBadge) ? `<div class="card-meta-row">
+          ${deadlineHtml}
           ${subtasks.length ? `<span class="card-subtasks">📌 ${doneCount}/${subtasks.length} subtasks</span>` : ''}
           ${modeBadge}
-          ${t.recurring ? `<span style="font-size:11px;padding:2px 7px;border-radius:6px;background:var(--lav-pale);color:var(--lavender);font-weight:600;">♻ ${t.recurring.frequency}</span>` : ''}
-        </div>
-        ${tags ? `<div class="card-tag-list">${tags}</div>` : ''}
+        </div>` : ''}
+        ${(tags || recurringBadge) ? `<div class="card-tag-list">${tags}${recurringBadge}</div>` : ''}
         ${!done ? `<div class="card-quick-actions card-actions-row">
           <button class="card-quick-btn cqb-today" onclick="event.stopPropagation();quickSetToday('${t.id}',this)" title="Plan for today">⚡</button>
+          <button class="card-quick-btn cqb-week" onclick="event.stopPropagation();quickShiftWeek('${t.id}',this)" title="Push all dates +7 days">+7</button>
           <button class="card-quick-btn cqb-done" onclick="event.stopPropagation();quickMarkDone('${t.id}',this)" title="Mark done">✓</button>
           <button class="card-quick-btn cqb-done-next" onclick="event.stopPropagation();quickDoneAndNext('${t.id}',this)" title="Done + add next action">✓→</button>
         </div>` : ''}
@@ -768,6 +780,46 @@ window.quickSetToday = async function(taskId, btn) {
     updateHeaderStats();
     setTimeout(() => renderCards(), 600);
   } catch(e) { btn.textContent = '⚡'; }
+}
+
+// Push every date in the task 7 days out: deadline, nextAction, and subtask due dates
+function addDays(dStr, n) {
+  const [y,m,d] = dStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m-1, d));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  return dt.toISOString().split('T')[0];
+}
+
+window.quickShiftWeek = async function(taskId, btn) {
+  const t = allTasks.find(t => t.id === taskId);
+  if (!t) return;
+  if (t.deadline)   t.deadline   = addDays(t.deadline, 7);
+  if (t.nextAction) t.nextAction = addDays(t.nextAction, 7);
+  (t.subtasks || []).forEach(s => { if (s.dueDate) s.dueDate = addDays(s.dueDate, 7); });
+  if (t.recurring && t.recurring.nextDue) {
+    t.recurring.nextDue = t.deadline || addDays(t.recurring.nextDue, 7); // keep deadline===nextDue
+  }
+  btn.textContent = '✓';
+  try {
+    await setDoc(doc(db,'tasks',taskId), t);
+    updateHeaderStats();
+    setTimeout(() => renderCards(), 500);
+  } catch(e) { console.error(e); btn.textContent = '+7'; }
+}
+
+// Google Calendar link from a task's deadline (mirrors task.html buildGCalUrl)
+function buildGCalUrl(t) {
+  const date = (t.deadline || '').replace(/-/g, '');
+  const details = [t.description, t.notes].filter(Boolean).join('\n\n').slice(0, 1500);
+  return 'https://calendar.google.com/calendar/render?action=TEMPLATE'
+    + '&text=' + encodeURIComponent(t.title || '')
+    + '&dates=' + `${date}T073000/${date}T080000`
+    + '&details=' + encodeURIComponent(details);
+}
+window.openGCal = function(taskId) {
+  const t = allTasks.find(t => t.id === taskId);
+  if (!t || !t.deadline) return;
+  window.open(buildGCalUrl(t), '_blank', 'noopener');
 }
 
 window.quickMarkDone = async function(taskId, btn) {

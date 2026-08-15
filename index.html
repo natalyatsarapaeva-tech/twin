@@ -1169,15 +1169,23 @@ Return JSON blocks at the end of your response when taking action.
 5. UPDATE SUBTASK:
 {"action":"update_subtask","taskId":"ID_from_context","subtaskIndex":0,"fields":{"title":"...","status":"...","dueDate":"...","note":"...","assigned":"..."}}
 
+6. CREATE TAG (only AFTER the user approves):
+{"action":"create_tag","tag":{"id":"lowercase-id","label":"Label","emoji":"🩸","group":"work|personal"}}
+
+7. ADD TO CONTEXT / MEMORY (only AFTER the user approves):
+{"action":"update_context","target":"user OR a tag id","text":"the durable fact to remember"}
+
 Supported tags: ${[...WORK_TAGS,...PERSONAL_TAGS].join(', ')}
 
 RULES:
-- To create, update, delete, or add a subtask you MUST output the JSON action block. Describing it in words alone does NOTHING — nothing is saved without the JSON.
+- To create/update/delete a task or subtask you MUST output the JSON action block. Words alone save NOTHING.
 - Output each action as a COMPACT, SINGLE-LINE JSON object. No code fences (no \`\`\`), no line breaks or indentation inside the JSON.
 - Write a short text reply FIRST, then put the JSON action block(s) on their own line(s) at the very END of your message.
-- Never say a task was created / updated / deleted. The app shows a ✅ confirmation only when the action actually runs. In prose describe intent ("Creating a task for…"), not completion.
-- When the user asks to add/change something, act in the SAME reply — do not ask for confirmation first (except deletes).
-- Confirm before deleting unless explicitly asked.
+- Never claim a task/tag/context was created or saved. The app shows a ✅ chip only when the action actually runs. In prose describe intent, not completion.
+- Tasks & subtasks: act in the SAME reply — don't ask first.
+- Deletes, NEW TAGS, and CONTEXT notes: PROPOSE in prose and ask; output their JSON action ONLY after the user explicitly agrees (in a later message). Never create a tag or write context silently.
+- Tag suggestions: if a task fits no existing tag, offer to create one (name + group) and ask before creating.
+- Context radar: when the user reveals a durable fact or recurring need (e.g. asking to schedule a blood-sugar test → periodic blood-sugar monitoring; an ongoing preference, a chronic condition, a standing constraint), ASK whether to save it to their context, phrased as a question. Save (update_context) only after they agree; append, never overwrite.
 - Use real task IDs exactly as given in the context above.`;
 }
 
@@ -1425,6 +1433,37 @@ async function executeAction(action) {
       await setDoc(doc(db,'tasks',action.taskId), allTasks[idx]);
       renderCards();
       return {ok:true, msg:'✅ Subtask updated'};
+    }
+    case 'create_tag': {
+      const tg = action.tag || {};
+      const group = tg.group === 'work' ? 'work' : (tg.group === 'personal' ? 'personal' : null);
+      if (!group) return {ok:false, msg:'❌ Tag needs group work|personal'};
+      const id = (tg.id || tg.label || '').toString().toLowerCase().trim()
+        .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+      if (!id) return {ok:false, msg:'❌ Tag id missing'};
+      if ([...WORK_TAGS, ...PERSONAL_TAGS].includes(id)) return {ok:false, msg:`⚠️ Tag "${id}" already exists`};
+      const label = tg.label || (id.charAt(0).toUpperCase() + id.slice(1));
+      const emoji = tg.emoji || '🏷️';
+      TAGS_CONFIG[group] = [...(TAGS_CONFIG[group] || []), {id, label, emoji}];
+      await setDoc(doc(db,'meta','tags'), TAGS_CONFIG);
+      buildTagMeta(); buildFilterTabs();
+      return {ok:true, msg:`✅ Tag created: ${emoji} ${label} (${group})`};
+    }
+    case 'update_context': {
+      const target = (action.target || 'user').toString().trim();
+      const text = (action.text || '').toString().trim();
+      if (!text) return {ok:false, msg:'❌ No context text'};
+      const tid = target.replace(/^tag-/,'');
+      if (target !== 'user' && ![...WORK_TAGS, ...PERSONAL_TAGS].includes(tid)) {
+        return {ok:false, msg:`❌ Unknown context target: ${target}`};
+      }
+      const docId = target === 'user' ? 'user' : 'tag-' + tid;
+      let existing = '';
+      try { const snap = await getDoc(doc(db,'contexts',docId)); if (snap.exists()) existing = snap.data().profile || ''; } catch(e) {}
+      const stamp = new Date().toISOString().split('T')[0];
+      const appended = (existing ? existing.trim() + '\n\n' : '') + `[added by assistant · ${stamp}] ${text}`;
+      await setDoc(doc(db,'contexts',docId), {profile: appended, updatedAt: new Date().toISOString()}, {merge:true});
+      return {ok:true, msg:`✅ Context saved → ${target === 'user' ? 'your profile' : '#'+tid}`};
     }
     default:
       return {ok:false, msg:`⚠️ Unknown action: ${action.action}`};

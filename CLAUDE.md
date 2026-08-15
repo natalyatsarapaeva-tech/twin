@@ -158,9 +158,19 @@ Tag labels and the list itself is planned to be user-editable (Wave 5).
 
 ### AI actions (CRUD from chat)
 
-Chat AI can execute: `create_task`, `update_task`, `delete_task`, `add_subtask`, `update_subtask`
+Chat AI can execute: `create_task`, `update_task`, `delete_task`, `add_subtask`, `update_subtask`,
+`create_tag`, `update_context`
 All via JSON blocks in GPT response, parsed and executed against Firebase.
 Action results shown as clickable green chips → "→ Open" links to task page.
+
+- **`create_tag`** — appends a tag to `meta/tags` (id sanitized, group work|personal, no dupes),
+  then rebuilds `TAG_META` + filter tabs. Proposed by the assistant, executed only after the
+  user approves (prompt rule).
+- **`update_context`** — appends (never overwrites) a dated `[added by assistant · date]` note
+  to the `profile` of `contexts/user` or `contexts/tag-{id}`. The assistant proactively asks to
+  save durable facts ("context radar"); writes only after approval.
+- Parser tolerates whitespace/newlines/code-fences around action JSON (`/\{\s*"action"/`); the
+  model is told to never claim success in prose (the ✅ chip is the source of truth).
 
 ### Deep research draft (task.html)
 

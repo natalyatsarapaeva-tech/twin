@@ -136,6 +136,18 @@
     .card-quick-btn:active{transform:scale(.88);}
     .cqb-today{background:#fff3cd;color:#a0742a;}
     .cqb-done{background:var(--green-pale);color:#2d6e52;}
+    .cqb-done-next{background:var(--lav-pale);color:var(--lavender);font-size:12px;}
+    /* next-action (successor) quick modal */
+    .na-modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-46%) scale(.96);opacity:0;pointer-events:none;z-index:210;width:min(420px,92vw);background:var(--white);border-radius:18px;box-shadow:0 12px 40px rgba(30,45,61,.25);padding:22px;transition:opacity .2s,transform .2s;}
+    .na-modal.open{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto;}
+    .na-title{font-family:'Spectral',serif;font-size:19px;font-weight:600;color:var(--slate);margin:0 0 4px;}
+    .na-sub{font-size:13px;color:var(--text-soft);margin:0 0 14px;line-height:1.5;}
+    .na-input{width:100%;padding:11px 13px;border-radius:11px;border:2px solid var(--border);font-family:'DM Sans',sans-serif;font-size:14px;color:var(--slate);outline:none;background:var(--surface2);box-sizing:border-box;}
+    .na-input:focus{border-color:var(--lavender);}
+    .na-actions{display:flex;gap:8px;margin-top:16px;}
+    .na-btn{flex:1;padding:12px;border-radius:11px;border:none;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;}
+    .na-btn.primary{background:var(--slate);color:var(--white);}
+    .na-btn.ghost{background:none;border:2px solid var(--border);color:var(--text-soft);}
     .status-new{background:var(--blue-light);}
     .status-in-progress{background:var(--amber);}
     .status-blocked{background:var(--red);}
@@ -335,6 +347,18 @@
     <div id="notif-types-wrap">
       <!-- rendered by renderNotifModal() -->
     </div>
+  </div>
+</div>
+
+<!-- NEXT ACTION (successor) QUICK MODAL -->
+<div class="chat-overlay" id="na-overlay" onclick="closeNextActionModal()" style="z-index:208;"></div>
+<div class="na-modal" id="na-modal">
+  <div class="na-title">What's the next action?</div>
+  <p class="na-sub" id="na-sub"></p>
+  <input class="na-input" id="na-input" placeholder="e.g. Prepare sports kit for school" onkeydown="if(event.key==='Enter')createNextActionFromIndex();"/>
+  <div class="na-actions">
+    <button class="na-btn ghost" onclick="closeNextActionModal()">Skip</button>
+    <button class="na-btn primary" onclick="createNextActionFromIndex()">＋ Create task</button>
   </div>
 </div>
 
@@ -681,7 +705,8 @@ window.renderCards = function() {
       <div class="card-right">
         ${!done ? `<div class="card-quick-actions" style="flex-direction:column;align-items:flex-end;margin-bottom:4px;">
           <button class="card-quick-btn cqb-today" onclick="event.stopPropagation();quickSetToday('${t.id}',this)" style="margin-bottom:4px;" title="Plan for today">⚡</button>
-          <button class="card-quick-btn cqb-done" onclick="event.stopPropagation();quickMarkDone('${t.id}',this)" title="Mark done">✓</button>
+          <button class="card-quick-btn cqb-done" onclick="event.stopPropagation();quickMarkDone('${t.id}',this)" style="margin-bottom:4px;" title="Mark done">✓</button>
+          <button class="card-quick-btn cqb-done-next" onclick="event.stopPropagation();quickDoneAndNext('${t.id}',this)" title="Done + add next action">✓→</button>
         </div>` : ''}
         <div class="card-status-dot ${statusDotClass}" style="margin-top:4px;"></div>
         <span class="card-arrow">›</span>
@@ -775,6 +800,66 @@ window.quickMarkDone = async function(taskId, btn) {
     updateHeaderStats();
     setTimeout(() => renderCards(), 500);
   } catch(e) { console.error(e); btn.textContent = '✓ Done'; }
+}
+
+// ── DONE + NEXT ACTION (GTD successor from the quick-button zone) ──
+let pendingSuccessor = null;
+
+window.quickDoneAndNext = async function(taskId, btn) {
+  const t = allTasks.find(t => t.id === taskId);
+  if (!t) return;
+  // Recurring tasks roll forward — a successor doesn't apply; fall back to plain done
+  if (t.recurring) { quickMarkDone(taskId, btn); return; }
+  btn.textContent = '✓';
+  btn.style.background = 'var(--green-pale)';
+  try {
+    t.status = 'done';
+    t.doneAt = new Date().toISOString();
+    await setDoc(doc(db,'tasks',taskId), t);
+    updateHeaderStats();
+    renderCards();
+    openNextActionModal(t);
+  } catch(e) { console.error(e); btn.textContent = '✓→'; }
+}
+
+window.openNextActionModal = function(t) {
+  pendingSuccessor = { tags: [...(t.tags||[])], primaryTag: t.primaryTag || null };
+  document.getElementById('na-sub').textContent = `Finished “${t.title}”. Anything this unlocks?`;
+  document.getElementById('na-input').value = '';
+  document.getElementById('na-overlay').style.display = 'block';
+  setTimeout(() => {
+    document.getElementById('na-modal').classList.add('open');
+    document.getElementById('na-input').focus();
+  }, 10);
+}
+
+window.closeNextActionModal = function() {
+  document.getElementById('na-modal').classList.remove('open');
+  setTimeout(() => document.getElementById('na-overlay').style.display = 'none', 200);
+  pendingSuccessor = null;
+}
+
+window.createNextActionFromIndex = async function() {
+  const title = document.getElementById('na-input').value.trim();
+  if (!title || !pendingSuccessor) { closeNextActionModal(); return; }
+  const id = 'task-' + Date.now() + '-' + Math.random().toString(36).slice(2,5);
+  const nt = {
+    id, title,
+    description: '', notes: '', status: 'new', priority: 'none',
+    deadline: null, nextAction: null, doneAt: null,
+    tags: [...pendingSuccessor.tags],       // inherit context from the finished task
+    primaryTag: pendingSuccessor.primaryTag,
+    subtasks: [], subtaskMode: 'parallel',
+    recurring: null,
+    createdAt: new Date().toISOString(), source: null
+  };
+  try {
+    await setDoc(doc(db,'tasks',id), nt);
+    allTasks.push(nt);
+    closeNextActionModal();
+    updateHeaderStats();
+    renderCards();
+  } catch(e) { console.error(e); }
 }
 
 // ── CLICKABLE ACTION BUBBLES ──

@@ -128,10 +128,6 @@
         <input class="field-input" type="date" id="f-due"/>
       </div>
       <div style="flex:1;min-width:140px;">
-        <label class="field-label">Next action date</label>
-        <input class="field-input" type="date" id="f-next-action"/>
-      </div>
-      <div style="flex:1;min-width:140px;">
         <label class="field-label">Priority</label>
         <select class="field-input" id="f-priority">
           <option value="none">No priority</option>
@@ -367,7 +363,9 @@ window.saveTask = async function() {
   const repeatFreq = document.getElementById('f-repeat').value;
   const repeatInterval = parseInt(document.getElementById('f-repeat-interval')?.value||'1');
   const deadline = document.getElementById('f-due').value || null;
-  const nextAction = document.getElementById('f-next-action').value || null;
+  // next action is derived from dated subtasks, not entered manually
+  const datedSubs = subtasks.filter(s => s.dueDate).map(s => s.dueDate).sort();
+  const nextAction = datedSubs[0] || null;
   // Rolling model: a recurring task always has deadline === recurring.nextDue
   const recurring = repeatFreq ? {
     frequency: repeatFreq,

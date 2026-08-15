@@ -1172,9 +1172,13 @@ Return JSON blocks at the end of your response when taking action.
 Supported tags: ${[...WORK_TAGS,...PERSONAL_TAGS].join(', ')}
 
 RULES:
-- Confirm before deleting unless explicitly asked
-- Use real IDs from context above
-- Text response first, JSON action blocks after`;
+- To create, update, delete, or add a subtask you MUST output the JSON action block. Describing it in words alone does NOTHING — nothing is saved without the JSON.
+- Output each action as a COMPACT, SINGLE-LINE JSON object. No code fences (no \`\`\`), no line breaks or indentation inside the JSON.
+- Write a short text reply FIRST, then put the JSON action block(s) on their own line(s) at the very END of your message.
+- Never say a task was created / updated / deleted. The app shows a ✅ confirmation only when the action actually runs. In prose describe intent ("Creating a task for…"), not completion.
+- When the user asks to add/change something, act in the SAME reply — do not ask for confirmation first (except deletes).
+- Confirm before deleting unless explicitly asked.
+- Use real task IDs exactly as given in the context above.`;
 }
 
 // ── CLASSIFIER (silent) ──
@@ -1311,11 +1315,12 @@ async function updateTagTaskSummary(tags) {
 // ── ACTION PARSER & EXECUTOR ──
 async function parseAndExecuteActions(reply) {
   const jsonBlocks = [];
-  let i = 0;
-  while (i < reply.length) {
-    const start = reply.indexOf('{"action"', i);
-    if (start === -1) break;
-    let depth=0, j=start, inStr=false, escape=false;
+  // Tolerate whitespace/newlines after the opening brace: {"action" | { "action" | {\n  "action"
+  const re = /\{\s*"action"\s*:/g;
+  let m;
+  while ((m = re.exec(reply)) !== null) {
+    const start = m.index;
+    let depth=0, j=start, inStr=false, escape=false, block=null;
     while (j < reply.length) {
       const ch = reply[j];
       if (escape) { escape=false; j++; continue; }
@@ -1323,21 +1328,25 @@ async function parseAndExecuteActions(reply) {
       if (ch==='"') inStr=!inStr;
       if (!inStr) {
         if (ch==='{') depth++;
-        if (ch==='}') { depth--; if(depth===0){jsonBlocks.push(reply.slice(start,j+1));i=j+1;break;} }
+        else if (ch==='}') { depth--; if(depth===0){ block=reply.slice(start,j+1); break; } }
       }
       j++;
     }
-    if (j>=reply.length) break;
+    if (block===null) break;      // unbalanced braces — stop scanning
+    jsonBlocks.push(block);
+    re.lastIndex = j + 1;         // resume after this block (don't re-match nested braces)
   }
   if (!jsonBlocks.length) return {actions:[], cleanReply:reply};
 
   const results = [];
   for (const block of jsonBlocks) {
     try { results.push(await executeAction(JSON.parse(block))); }
-    catch(e) { results.push({ok:false, msg:'JSON parse error: '+e.message}); }
+    catch(e) { results.push({ok:false, msg:'⚠️ Action not saved (bad format)'}); }
   }
   let cleanReply = reply;
-  jsonBlocks.forEach(b => { cleanReply = cleanReply.replace(b,'').trim(); });
+  jsonBlocks.forEach(b => { cleanReply = cleanReply.replace(b,''); });
+  // Remove code fences left wrapping the (now removed) JSON so no stray ``` shows
+  cleanReply = cleanReply.replace(/```json/gi,'').replace(/```/g,'').trim();
   return {actions: results, cleanReply};
 }
 
@@ -1478,7 +1487,7 @@ window.sendChatMessage = async function() {
     const systemPrompt = await buildRichSystemPrompt(relevantTags, contextTasks, topic);
 
     // Step 3: Main call
-    const data = await gpt({model:'gpt-4o',max_tokens:1200,
+    const data = await gpt({model:'gpt-4o',max_tokens:1200,temperature:0.3,
       messages:[{role:'system',content:systemPrompt},...chatHistory]});
 
     const reply = data.choices[0].message.content;

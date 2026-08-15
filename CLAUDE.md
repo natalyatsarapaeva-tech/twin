@@ -217,11 +217,15 @@ Principle: the tracker surfaces the **next available action**, not the project t
   counted as available; surfaced via the `⏳ Waiting` filter on index and a
   `⏳ Waiting: {who}` line on card + subtask. The "Waiting on" field in the subtask
   modal shows only when status = Blocked.
+- **Paired filters (not sorting)** — index slices both ways: `🎯 Available` (tasks
+  with a doable next action right now) and `⏳ Waiting` (blocked on someone). List
+  order is left unchanged.
 - **Successor / эстафета** — completing a task (non-recurring, via `setStatus('done')`)
   opens the "What's the next action?" modal → creates a new task inheriting tags /
   primaryTag. Implements the GTD "what's the next action?" ritual for the case where
   the next step only becomes clear on completion.
-- Toggle lives in task.html Subtasks header; `subtaskMode` persists via `save()` (setDoc).
+- Toggle lives in task.html Subtasks header and the add-task.html form (`f-subtask-mode`);
+  `subtaskMode` persists via `save()` (setDoc).
 - Backward compatible: tasks without `subtaskMode` behave as `parallel`; `waitingOn` optional.
 
 -----

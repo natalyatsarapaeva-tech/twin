@@ -177,6 +177,11 @@
   <!-- SUBTASKS -->
   <div class="section">
     <div class="section-title">📌 Subtasks</div>
+    <label class="field-label" style="margin-top:0">How subtasks unlock</label>
+    <select class="field-input" id="f-subtask-mode" style="width:100%;margin-bottom:12px;">
+      <option value="parallel">⇉ Parallel — do in any order</option>
+      <option value="sequential">▸ Sequential — one step at a time</option>
+    </select>
     <div id="subtask-list"></div>
     <button class="add-row-btn" onclick="addSubRow()">+ Add subtask</button>
   </div>
@@ -379,6 +384,7 @@ window.saveTask = async function() {
     tags: [...selectedTags],
     primaryTag: document.getElementById('f-primary-tag')?.value || (selectedTags[0]||null),
     status: 'new',
+    subtaskMode: document.getElementById('f-subtask-mode')?.value || 'parallel',
     subtasks,
     notes: '',
     recurring,

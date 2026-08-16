@@ -75,19 +75,7 @@
   </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyD1uWPrp12lvpyBzXCOq9IrMuTU4uOTRao",
-  authDomain: "natas-kitchen.firebaseapp.com",
-  projectId: "natas-kitchen",
-  storageBucket: "natas-kitchen.firebasestorage.app",
-  messagingSenderId: "756908196325",
-  appId: "1:756908196325:web:e8bab3aac2a322f9436f0c"
-};
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+import { db, doc, getDoc, setDoc, requireAuth, migrateIfOwner } from "./store.js";
 
 const WORKER_URL = 'https://task-intake-worker.ntsarapaeva.workers.dev';
 async function gpt(payload){
@@ -297,7 +285,9 @@ window.skip = async function(){ await markOnboarded(); window.location.href='ind
 // autosize textarea
 document.getElementById('input').addEventListener('input', function(){ this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,120)+'px'; });
 
-// ── Boot ──
+// ── Boot ── (gated on sign-in; onboarding writes into the user's own store)
+const user = await requireAuth();
+await migrateIfOwner(user);
 await loadTags();
 bubble('ai', "Hi! I'm your Twin setup guide 👋\nIn a few minutes we'll set up your profile, a handful of tags that fit you, and your first tasks.\n\nTo start — tell me a bit about yourself: what do you do, and which areas of life do you want to keep on top of?");
 chatHistory.push({role:'assistant', content:"Hi! I'm your Twin setup guide. Let's set up your profile, tags, and first tasks. Tell me about yourself: what you do and which areas of life you want to keep on top of."});

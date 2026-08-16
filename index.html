@@ -163,7 +163,10 @@
     .card-tag.recurring-badge{background:var(--surface2);color:var(--text-soft);}
     /* swipe-to-delete: card sits above a red delete layer revealed on left swipe */
     .card-swipe-wrap{position:relative;border-radius:16px;}
-    .card-delete-bg{position:absolute;inset:0;border-radius:16px;background:var(--red);display:flex;align-items:center;justify-content:flex-end;padding-right:22px;color:#fff;pointer-events:none;}
+    /* hidden until an actual swipe: done cards are translucent (.done-card),
+       so a permanently-painted layer would bleed red through them */
+    .card-delete-bg{position:absolute;inset:0;border-radius:16px;background:var(--red);display:flex;align-items:center;justify-content:flex-end;padding-right:22px;color:#fff;pointer-events:none;opacity:0;transition:opacity .12s ease;}
+    .card-swipe-wrap.swiping .card-delete-bg{opacity:1;}
     .card-delete-bg .cdb-ico{font-size:20px;}
     .card-delete-bg .cdb-label{font-size:13px;font-weight:600;margin-left:8px;font-family:'DM Sans',sans-serif;}
     .card-swipe-wrap .task-card{touch-action:pan-y;}
@@ -878,6 +881,7 @@ function attachCardSwipe(card, taskId) {
       horizontal = Math.abs(mx) > Math.abs(my) + 4;
       decided = true;
       if (!horizontal) { pressed = false; return; }       // vertical → let the page scroll
+      card.parentElement.classList.add('swiping');        // reveal the delete layer
     }
     if (ev.cancelable) ev.preventDefault();               // own the horizontal gesture
     dx = Math.max(-MAX, Math.min(0, mx));                 // left only
@@ -890,7 +894,7 @@ function attachCardSwipe(card, taskId) {
     if (horizontal) {
       card.classList.add('snap-back');
       if (dx <= -TRIGGER) { card.style.transform = 'translateX(-100%)'; openDeleteModal(taskId, card); }
-      else { card.style.transform = ''; }
+      else { card.style.transform = ''; card.parentElement.classList.remove('swiping'); }
     }
     horizontal = false; decided = false; dx = 0;
     setTimeout(() => { card._swiped = false; }, 60);
@@ -940,6 +944,7 @@ window.closeDeleteModal = function() {
   if (pendingDelete && pendingDelete.card) {
     pendingDelete.card.classList.add('snap-back');
     pendingDelete.card.style.transform = '';
+    pendingDelete.card.parentElement.classList.remove('swiping');
   }
   pendingDelete = null;
 };

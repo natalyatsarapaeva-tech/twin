@@ -810,8 +810,19 @@ function saveFilterForNewTask() {
 window.quickSetToday = async function(taskId, btn) {
   const t = allTasks.find(t => t.id === taskId);
   if (!t) return;
-  // "Work on it today" — plan the next action; the hard deadline stays untouched
-  t.nextAction = todayStr();
+  const today = todayStr();
+  const subs = t.subtasks || [];
+  // First uncompleted subtask (in list order), if any
+  const firstPending = subs.find(s => s.status !== 'done');
+  if (firstPending) {
+    // Task has (open) subtasks → schedule its next action for today:
+    // give the first uncompleted subtask a due date of today, mirror it on nextAction
+    firstPending.dueDate = today;
+    t.nextAction = today;
+  } else {
+    // No subtasks (or all done) → give the task itself a deadline of today
+    t.deadline = today;
+  }
   btn.textContent = '✓ Set';
   btn.style.background = 'var(--lav-pale)';
   try {

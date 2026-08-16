@@ -147,19 +147,7 @@
 </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
-import { getFirestore, collection, getDocs, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyD1uWPrp12lvpyBzXCOq9IrMuTU4uOTRao",
-  authDomain: "natas-kitchen.firebaseapp.com",
-  projectId: "natas-kitchen",
-  storageBucket: "natas-kitchen.firebasestorage.app",
-  messagingSenderId: "756908196325",
-  appId: "1:756908196325:web:e8bab3aac2a322f9436f0c"
-};
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+import { db, collection, getDocs, doc, getDoc, setDoc, requireAuth, migrateIfOwner } from "./store.js";
 
 // ── TAGS ──
 const DEFAULT_TAGS = {
@@ -212,7 +200,7 @@ async function load() {
   renderMap();
 }
 async function init() { await loadTags(); load(); }
-init().catch(e => {
+requireAuth().then(migrateIfOwner).then(init).catch(e => {
   document.getElementById('loading').innerHTML = `<div style='color:var(--blue-pale);padding:24px;text-align:center'>Error: ${e.message}</div>`;
 });
 

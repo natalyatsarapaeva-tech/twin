@@ -1,0 +1,35 @@
+rules_version = '2';
+
+// Per-user isolation for the Twin task manager, scoped to its own top-level
+// app namespace so it coexists with other apps in the shared `natas-kitchen`
+// Firebase project.
+//
+// Data model:  apps/twin/users/{uid}/{tasks|contexts|meta}/...
+// A signed-in Google user may read/write ONLY their own users/{uid} subtree.
+//
+// IMPORTANT: a Firestore database has ONE ruleset for ALL collections. This file
+// only governs apps/twin/**. If a sibling app shares this project, MERGE its
+// rules into this same file — do NOT add a blanket `match /{document=**}` deny
+// here, or you'll lock the other app out. Everything not explicitly allowed is
+// already denied by default in production (locked) mode.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Twin's per-user private stores.
+    match /apps/twin/users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Legacy root collections (tasks/, contexts/, meta/) from the pre-auth,
+    // pre-namespace single-user era are intentionally NOT matched here, so the
+    // browser app can no longer touch them (default deny). The Cloudflare Worker
+    // still reads/writes the root via the Firebase Admin service account, which
+    // bypasses security rules, so intake keeps working until the worker is
+    // migrated to write apps/twin/users/{OWNER_UID}/...
+    //
+    // NOTE: deploy these rules only AFTER the owner has signed in once and the
+    // one-time migration (store.js migrateIfOwner) has copied root -> namespaced.
+    // That migration reads the root from the browser; the default-deny above
+    // would block it.
+  }
+}

@@ -161,6 +161,13 @@
     .card-due-gcal.soon{background:#e8f4fd;color:var(--blue);}
     .card-due-gcal.normal{background:var(--surface2);color:var(--text-soft);}
     .card-tag.recurring-badge{background:var(--surface2);color:var(--text-soft);}
+    /* swipe-to-delete: card sits above a red delete layer revealed on left swipe */
+    .card-swipe-wrap{position:relative;border-radius:16px;}
+    .card-delete-bg{position:absolute;inset:0;border-radius:16px;background:var(--red);display:flex;align-items:center;justify-content:flex-end;padding-right:22px;color:#fff;pointer-events:none;}
+    .card-delete-bg .cdb-ico{font-size:20px;}
+    .card-delete-bg .cdb-label{font-size:13px;font-weight:600;margin-left:8px;font-family:'DM Sans',sans-serif;}
+    .card-swipe-wrap .task-card{touch-action:pan-y;}
+    .card-swipe-wrap .task-card.snap-back{transition:transform .2s ease,box-shadow .2s;}
     /* next-action (successor) quick modal */
     .na-modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-46%) scale(.96);opacity:0;pointer-events:none;z-index:210;width:min(420px,92vw);background:var(--white);border-radius:18px;box-shadow:0 12px 40px rgba(30,45,61,.25);padding:22px;transition:opacity .2s,transform .2s;}
     .na-modal.open{opacity:1;transform:translate(-50%,-50%) scale(1);pointer-events:auto;}
@@ -172,6 +179,8 @@
     .na-btn{flex:1;padding:12px;border-radius:11px;border:none;font-size:14px;font-weight:600;cursor:pointer;font-family:'DM Sans',sans-serif;}
     .na-btn.primary{background:var(--slate);color:var(--white);}
     .na-btn.ghost{background:none;border:2px solid var(--border);color:var(--text-soft);}
+    .na-btn.danger{background:var(--red);color:#fff;}
+    .na-actions.col{flex-direction:column;}
     .status-new{background:var(--blue-light);}
     .status-in-progress{background:var(--amber);}
     .status-blocked{background:var(--red);}
@@ -400,6 +409,14 @@
     <button class="na-btn ghost" onclick="closeNextActionModal()">Skip</button>
     <button class="na-btn primary" onclick="createNextActionFromIndex()">＋ Create task</button>
   </div>
+</div>
+
+<!-- SWIPE-TO-DELETE CONFIRM MODAL -->
+<div class="chat-overlay" id="del-overlay" onclick="closeDeleteModal()" style="z-index:208;"></div>
+<div class="na-modal" id="del-modal">
+  <div class="na-title">Delete task?</div>
+  <p class="na-sub" id="del-sub"></p>
+  <div class="na-actions" id="del-actions"></div>
 </div>
 
 <div class="chat-overlay" id="chat-overlay" onclick="closeChat()"></div>
@@ -766,12 +783,22 @@ window.renderCards = function() {
         <div class="card-status-dot ${statusDotClass}"></div>
         <span class="card-arrow">›</span>
       </div>`;
-    card.onclick = () => {
+    card.onclick = (e) => {
+      if (card._swiped) { e.preventDefault(); e.stopPropagation(); return; }
       localStorage.setItem('currentTaskId', t.id);
       localStorage.setItem('savedFilter', currentFilter);
       window.location.href = 'task.html';
     };
-    grid.appendChild(card);
+    // wrap the card so a left swipe can reveal a delete action behind it
+    const wrap = document.createElement('div');
+    wrap.className = 'card-swipe-wrap';
+    const delBg = document.createElement('div');
+    delBg.className = 'card-delete-bg';
+    delBg.innerHTML = '<span class="cdb-ico">🗑</span><span class="cdb-label">Delete</span>';
+    wrap.appendChild(delBg);
+    wrap.appendChild(card);
+    attachCardSwipe(card, t.id);
+    grid.appendChild(wrap);
   });
 
   grid.classList.remove('stagger'); void grid.offsetWidth; grid.classList.add('stagger');
@@ -831,6 +858,123 @@ window.quickSetToday = async function(taskId, btn) {
     setTimeout(() => renderCards(), 600);
   } catch(e) { btn.textContent = '⚡'; }
 }
+
+// ── SWIPE-TO-DELETE ──
+// Left swipe on a card drags it aside; releasing past the trigger asks to delete.
+function attachCardSwipe(card, taskId) {
+  let startX = 0, startY = 0, dx = 0, pressed = false, decided = false, horizontal = false;
+  const TRIGGER = 90;   // px past which a release opens the delete prompt
+  const MAX = 130;      // clamp how far the card can slide
+
+  const begin = (x, y) => {
+    startX = x; startY = y; dx = 0; pressed = true; decided = false; horizontal = false;
+    card.classList.remove('snap-back');
+  };
+  const move = (x, y, ev) => {
+    if (!pressed) return;
+    const mx = x - startX, my = y - startY;
+    if (!decided) {
+      if (Math.abs(mx) < 8 && Math.abs(my) < 8) return;   // wait until the intent is clear
+      horizontal = Math.abs(mx) > Math.abs(my) + 4;
+      decided = true;
+      if (!horizontal) { pressed = false; return; }       // vertical → let the page scroll
+    }
+    if (ev.cancelable) ev.preventDefault();               // own the horizontal gesture
+    dx = Math.max(-MAX, Math.min(0, mx));                 // left only
+    card.style.transform = `translateX(${dx}px)`;
+    if (Math.abs(dx) > 6) card._swiped = true;            // suppress the tap-to-open click
+  };
+  const end = () => {
+    if (!pressed && !horizontal) return;
+    pressed = false;
+    if (horizontal) {
+      card.classList.add('snap-back');
+      if (dx <= -TRIGGER) { card.style.transform = 'translateX(-100%)'; openDeleteModal(taskId, card); }
+      else { card.style.transform = ''; }
+    }
+    horizontal = false; decided = false; dx = 0;
+    setTimeout(() => { card._swiped = false; }, 60);
+  };
+
+  card.addEventListener('touchstart', e => begin(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
+  card.addEventListener('touchmove',  e => move(e.touches[0].clientX, e.touches[0].clientY, e), { passive: false });
+  card.addEventListener('touchend',   end);
+  card.addEventListener('touchcancel', end);
+  // desktop mouse drag via pointer events (touch is handled above)
+  card.addEventListener('pointerdown',   e => { if (e.pointerType === 'mouse') { begin(e.clientX, e.clientY); try { card.setPointerCapture(e.pointerId); } catch(_){} } });
+  card.addEventListener('pointermove',   e => { if (e.pointerType === 'mouse') move(e.clientX, e.clientY, e); });
+  card.addEventListener('pointerup',     e => { if (e.pointerType === 'mouse') end(); });
+  card.addEventListener('pointercancel', e => { if (e.pointerType === 'mouse') end(); });
+}
+
+let pendingDelete = null;   // { taskId, card } awaiting the delete-modal choice
+
+window.openDeleteModal = function(taskId, card) {
+  const t = allTasks.find(x => x.id === taskId);
+  if (!t) return;
+  pendingDelete = { taskId, card };
+  const sub = document.getElementById('del-sub');
+  const actions = document.getElementById('del-actions');
+  if (t.recurring) {
+    sub.textContent = `“${t.title}” repeats (${t.recurring.frequency}). Remove just the current occurrence, or the whole series?`;
+    actions.className = 'na-actions col';
+    actions.innerHTML =
+      `<button class="na-btn danger" onclick="confirmDelete('occurrence')">Delete this occurrence</button>` +
+      `<button class="na-btn danger" onclick="confirmDelete('series')">Delete entire series</button>` +
+      `<button class="na-btn ghost" onclick="closeDeleteModal()">Cancel</button>`;
+  } else {
+    sub.textContent = `“${t.title}” will be permanently deleted.`;
+    actions.className = 'na-actions';
+    actions.innerHTML =
+      `<button class="na-btn ghost" onclick="closeDeleteModal()">Cancel</button>` +
+      `<button class="na-btn danger" onclick="confirmDelete('single')">Delete</button>`;
+  }
+  document.getElementById('del-overlay').style.display = 'block';
+  setTimeout(() => document.getElementById('del-modal').classList.add('open'), 10);
+};
+
+// hide the modal without deleting; snap the swiped card back into place
+window.closeDeleteModal = function() {
+  document.getElementById('del-modal').classList.remove('open');
+  setTimeout(() => document.getElementById('del-overlay').style.display = 'none', 200);
+  if (pendingDelete && pendingDelete.card) {
+    pendingDelete.card.classList.add('snap-back');
+    pendingDelete.card.style.transform = '';
+  }
+  pendingDelete = null;
+};
+
+window.confirmDelete = async function(mode) {
+  if (!pendingDelete) return;
+  const { taskId } = pendingDelete;
+  const idx = allTasks.findIndex(x => x.id === taskId);
+  if (idx === -1) { closeDeleteModal(); return; }
+  const t = allTasks[idx];
+  try {
+    if (mode === 'occurrence' && t.recurring) {
+      // skip just this occurrence: roll the series forward, no archived copy
+      const rec = t.recurring;
+      const nextDue = nextOccurrence(rec.nextDue || t.deadline || todayStr(), rec.frequency, rec.interval || 1);
+      const rolled = {...t, status: 'new', doneAt: null, deadline: nextDue, nextAction: null,
+        subtasks: (t.subtasks || []).map(s => ({...s, status: 'new'})),
+        recurring: {...rec, nextDue}};
+      await setDoc(doc(db,'tasks',taskId), rolled);
+      allTasks[idx] = rolled;
+    } else {
+      // single task, or the entire recurring series → remove the document
+      await deleteDoc(doc(db,'tasks',taskId));
+      allTasks.splice(idx, 1);
+    }
+    pendingDelete = null;   // renderCards rebuilds the cards; don't touch the old node
+    document.getElementById('del-modal').classList.remove('open');
+    setTimeout(() => document.getElementById('del-overlay').style.display = 'none', 200);
+    updateHeaderStats();
+    renderCards();
+  } catch(e) {
+    console.error(e);
+    closeDeleteModal();
+  }
+};
 
 // Push every date in the task 7 days out: deadline, nextAction, and subtask due dates
 function addDays(dStr, n) {

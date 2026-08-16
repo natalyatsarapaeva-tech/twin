@@ -86,15 +86,13 @@ async function gpt(payload){
 }
 
 // ── Tag config (shared meta/tags doc) ──
-const DEFAULT_TAGS = {
-  work:[{id:'dev',label:'Dev',emoji:'💻'},{id:'strategy',label:'Strategy',emoji:'🎯'},{id:'analytics',label:'Analytics',emoji:'📊'},{id:'clients',label:'Clients',emoji:'🤝'},{id:'leads',label:'Leads',emoji:'📣'},{id:'ux',label:'UX',emoji:'🎨'}],
-  personal:[{id:'kids',label:'Kids',emoji:'👶'},{id:'health',label:'Health',emoji:'💚'},{id:'urgent',label:'Urgent',emoji:'🚨'},{id:'ideas',label:'Ideas',emoji:'💡'},{id:'money',label:'Money',emoji:'💰'},{id:'home',label:'Home',emoji:'🏠'},{id:'travel',label:'Travel',emoji:'✈️'},{id:'rest',label:'Rest',emoji:'🌊'},{id:'swedish',label:'Swedish',emoji:'🇸🇪'}]
-};
-let TAGS_CONFIG = DEFAULT_TAGS;
+// A new account starts with NO tags — the onboarding assistant creates a set
+// tailored to the user (create_tag). Never seed a canned taxonomy.
+let TAGS_CONFIG = { work: [], personal: [] };
 let WORK_TAGS = [], PERSONAL_TAGS = [];
 function rebuildTags(){ WORK_TAGS = TAGS_CONFIG.work.map(t=>t.id); PERSONAL_TAGS = TAGS_CONFIG.personal.map(t=>t.id); }
 async function loadTags(){
-  try{ const s = await getDoc(doc(db,'meta','tags')); if(s.exists()) TAGS_CONFIG = s.data(); }catch(e){}
+  try{ const s = await getDoc(doc(db,'meta','tags')); if(s.exists()){ const d = s.data()||{}; TAGS_CONFIG = {work:d.work||[], personal:d.personal||[]}; } }catch(e){}
   rebuildTags();
 }
 

@@ -121,13 +121,21 @@ contexts/
 
 -----
 
-## Tag taxonomy (fixed structure)
+## Tag taxonomy (per user, starts empty)
 
-**Work tags:** `dev`, `strategy`, `analytics`, `clients`, `leads`, `ux`
-**Personal tags:** `kids`, `health`, `urgent`, `ideas`, `money`, `home`, `travel`, `rest`, `swedish`
+There is **no built-in tag list**. A new account starts with `{work: [], personal: []}`
+and gets its tags from the onboarding assistant (welcome.html PHASE 3), which proposes a
+set tailored to what the user told it and creates them via `create_tag`. No page ever
+seeds a default taxonomy — `loadTags()` reads `meta/tags` and stays empty when the doc is
+absent; `meta/tags` is written only by explicit tag creation/editing.
 
-Parent branches `work` and `personal` are not editable.
-Tag labels and the list itself is planned to be user-editable (Wave 5).
+Parent branches `work` and `personal` are the two fixed groups every tag belongs to.
+On index.html a group whose array is empty is **hidden entirely** (no bare "Work" /
+"Personal" label). Tag ids stay latin-lowercase slugs; labels follow the user's language.
+
+The original single-user taxonomy (`dev`, `strategy`, `analytics`, `clients`, `leads`,
+`ux` / `kids`, `health`, `urgent`, `ideas`, `money`, `home`, `travel`, `rest`, `swedish`)
+now lives only in the owner's `meta/tags` document, not in code.
 
 -----
 
@@ -263,8 +271,16 @@ Principle: the tracker surfaces the **next available action**, not the project t
 
 ## Navigation & state
 
-- Active filter tab saved to `localStorage('savedFilter')` when opening a task
-- Restored on return from task.html
+- **Index filters are two independent axes** that combine (never replace each other):
+  `currentView` — the top row (`all`, `no-date`, `this-week`, `available`, `waiting`,
+  `done-today`, `done`, plus `overdue`/`today` from the header stat chips) slices by
+  time/status; `currentTag` — the Work/Personal rows (a tag id, or `work`/`personal` for
+  a whole group, or `null`) slices by topic. So "This week" × "Kids" is a valid selection.
+  Clicking the active tag again clears the tag axis. Each row only ever repaints its own
+  buttons (`syncViewTabs()` / `syncTagTabs()` derive highlight state from the two vars).
+- Both axes saved to `localStorage('savedFilter')` as JSON `{view, tag}` when opening a
+  task (`rememberFilter()`), restored on return. A legacy plain-string value is still
+  understood and routed to whichever axis it belongs to.
 - `localStorage('currentTaskId')` — which task is open in task.html
 - `localStorage('newTaskPresetTag')` — pre-selected tag when coming from filtered view
 - `localStorage('monthlyGenerated')` — YYYY-MM, prevents duplicate monthly suggestions

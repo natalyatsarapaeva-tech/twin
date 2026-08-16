@@ -401,23 +401,11 @@ import { db, doc, getDoc, updateDoc, deleteDoc, setDoc, getDocs, collection, req
 
 // ── TAG TAXONOMY ──
 // ── TAGS ──
-const DEFAULT_TAGS = {
-  work: [
-    {id:'dev',label:'Dev',emoji:'💻'},{id:'strategy',label:'Strategy',emoji:'🎯'},
-    {id:'analytics',label:'Analytics',emoji:'📊'},{id:'clients',label:'Clients',emoji:'🤝'},
-    {id:'leads',label:'Leads',emoji:'📣'},{id:'ux',label:'UX',emoji:'🎨'},
-  ],
-  personal: [
-    {id:'kids',label:'Kids',emoji:'👶'},{id:'health',label:'Health',emoji:'💚'},
-    {id:'urgent',label:'Urgent',emoji:'🚨'},{id:'ideas',label:'Ideas',emoji:'💡'},
-    {id:'money',label:'Money',emoji:'💰'},{id:'home',label:'Home',emoji:'🏠'},
-    {id:'travel',label:'Travel',emoji:'✈️'},{id:'rest',label:'Rest',emoji:'🌊'},
-    {id:'swedish',label:'Swedish',emoji:'🇸🇪'},
-  ]
-};
-let TAGS_CONFIG = DEFAULT_TAGS;
-let WORK_TAGS = DEFAULT_TAGS.work.map(t=>t.id);
-let PERSONAL_TAGS = DEFAULT_TAGS.personal.map(t=>t.id);
+// A new account starts with NO tags — the onboarding assistant creates a set
+// tailored to the user (create_tag). Never seed a canned taxonomy.
+let TAGS_CONFIG = { work: [], personal: [] };
+let WORK_TAGS = [];
+let PERSONAL_TAGS = [];
 let TAG_META = {};
 function buildTagMeta() {
   WORK_TAGS = TAGS_CONFIG.work.map(t=>t.id);
@@ -429,9 +417,12 @@ function buildTagMeta() {
 async function loadTags() {
   try {
     const snap = await getDoc(doc(db,'meta','tags'));
-    if (snap.exists()) { TAGS_CONFIG = snap.data(); }
-    else { await setDoc(doc(db,'meta','tags'), DEFAULT_TAGS); }
-  } catch(e) { console.warn('loadTags failed, using defaults'); }
+    // No doc yet = brand-new account: stay empty rather than writing a default set
+    if (snap.exists()) {
+      const d = snap.data() || {};
+      TAGS_CONFIG = { work: d.work || [], personal: d.personal || [] };
+    }
+  } catch(e) { console.warn('loadTags failed, starting with no tags'); }
   buildTagMeta();
 }
 

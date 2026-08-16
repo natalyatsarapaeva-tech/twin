@@ -331,11 +331,11 @@
         <button class="tab" onclick="filterCards('done',this)">📂 All completed</button>
       </div>
     </div>
-    <div class="filter-group">
+    <div class="filter-group" id="filter-group-work">
       <div class="filter-group-label">Work</div>
       <div class="filter-tabs" id="filter-tabs-work"></div>
     </div>
-    <div class="filter-group">
+    <div class="filter-group" id="filter-group-personal">
       <div class="filter-group-label">Personal</div>
       <div class="filter-tabs" id="filter-tabs-personal"></div>
     </div>
@@ -466,7 +466,10 @@ import { db, collection, getDocs, doc, getDoc, setDoc, deleteDoc, requireAuth, m
 
 // ── STATE ──
 let allTasks = [];
-let currentFilter = 'all';
+// Two independent filter axes — the top row slices by time/status, the tag rows
+// slice by topic. They combine (e.g. "This week" × "Kids"), never replace each other.
+let currentView = 'all';   // 'all'|'no-date'|'this-week'|'available'|'waiting'|'done-today'|'done'|'overdue'|'today'
+let currentTag  = null;    // null (any tag) | 'work' | 'personal' | a tag id
 let currentActiveTab = null;
 let searchQuery = '';
 let sortAsc = true;
@@ -488,23 +491,11 @@ async function gpt(payload) {
 
 // ── TAG TAXONOMY ──
 // ── TAGS ──
-const DEFAULT_TAGS = {
-  work: [
-    {id:'dev',label:'Dev',emoji:'💻'},{id:'strategy',label:'Strategy',emoji:'🎯'},
-    {id:'analytics',label:'Analytics',emoji:'📊'},{id:'clients',label:'Clients',emoji:'🤝'},
-    {id:'leads',label:'Leads',emoji:'📣'},{id:'ux',label:'UX',emoji:'🎨'},
-  ],
-  personal: [
-    {id:'kids',label:'Kids',emoji:'👶'},{id:'health',label:'Health',emoji:'💚'},
-    {id:'urgent',label:'Urgent',emoji:'🚨'},{id:'ideas',label:'Ideas',emoji:'💡'},
-    {id:'money',label:'Money',emoji:'💰'},{id:'home',label:'Home',emoji:'🏠'},
-    {id:'travel',label:'Travel',emoji:'✈️'},{id:'rest',label:'Rest',emoji:'🌊'},
-    {id:'swedish',label:'Swedish',emoji:'🇸🇪'},
-  ]
-};
-let TAGS_CONFIG = DEFAULT_TAGS;
-let WORK_TAGS = DEFAULT_TAGS.work.map(t=>t.id);
-let PERSONAL_TAGS = DEFAULT_TAGS.personal.map(t=>t.id);
+// A new account starts with NO tags — the onboarding assistant creates a set
+// tailored to the user (create_tag). Never seed a canned taxonomy.
+let TAGS_CONFIG = { work: [], personal: [] };
+let WORK_TAGS = [];
+let PERSONAL_TAGS = [];
 let TAG_META = {};
 function buildTagMeta() {
   WORK_TAGS = TAGS_CONFIG.work.map(t=>t.id);
@@ -516,18 +507,27 @@ function buildTagMeta() {
 async function loadTags() {
   try {
     const snap = await getDoc(doc(db,'meta','tags'));
-    if (snap.exists()) { TAGS_CONFIG = snap.data(); }
-    else { await setDoc(doc(db,'meta','tags'), DEFAULT_TAGS); }
-  } catch(e) { console.warn('loadTags failed, using defaults'); }
+    // No doc yet = brand-new account: stay empty rather than writing a default set
+    if (snap.exists()) {
+      const d = snap.data() || {};
+      TAGS_CONFIG = { work: d.work || [], personal: d.personal || [] };
+    }
+  } catch(e) { console.warn('loadTags failed, starting with no tags'); }
   buildTagMeta();
 }
 function buildFilterTabs() {
-  document.getElementById('filter-tabs-work').innerHTML =
-    `<button class="tab" onclick="filterCards('work',this)">💼 All work</button>` +
-    TAGS_CONFIG.work.map(t=>`<button class="tab" onclick="filterCards('${t.id}',this)">${t.emoji} ${t.label}</button>`).join('');
-  document.getElementById('filter-tabs-personal').innerHTML =
-    `<button class="tab" onclick="filterCards('personal',this)">🌿 All personal</button>` +
-    TAGS_CONFIG.personal.map(t=>`<button class="tab" onclick="filterCards('${t.id}',this)">${t.emoji} ${t.label}</button>`).join('');
+  // A group with no tags yet is hidden entirely — no empty "Work"/"Personal" row
+  [['work','filter-group-work','filter-tabs-work','💼 All work'],
+   ['personal','filter-group-personal','filter-tabs-personal','🌿 All personal']
+  ].forEach(([group, groupId, tabsId, allLabel]) => {
+    const tags = TAGS_CONFIG[group] || [];
+    document.getElementById(groupId).style.display = tags.length ? '' : 'none';
+    document.getElementById(tabsId).innerHTML = tags.length
+      ? `<button class="tab" onclick="filterByTag('${group}',this)">${allLabel}</button>` +
+        tags.map(t=>`<button class="tab" onclick="filterByTag('${t.id}',this)">${t.emoji} ${t.label}</button>`).join('')
+      : '';
+  });
+  syncTagTabs();
 }
 
 // ── LOAD ──
@@ -611,7 +611,8 @@ function getFiltered() {
   let list = [...allTasks];
   const today = todayStr();
 
-  switch(currentFilter) {
+  // ── axis 1: the time/status view (top row) ──
+  switch(currentView) {
     case 'all':
       // Default: active tasks + tasks completed today
       list = list.filter(t =>
@@ -633,11 +634,15 @@ function getFiltered() {
     case 'waiting':    list = list.filter(t => t.status !== 'done' && (t.status === 'blocked' || (t.subtasks||[]).some(s => s.status === 'blocked'))); break;
     case 'done-today': list = list.filter(t => t.status === 'done' && t.doneAt && t.doneAt.startsWith(today)); break;
     case 'done':       list = list.filter(t => t.status === 'done'); break;
-    case 'work':       list = list.filter(t => t.status !== 'done' && (t.tags||[]).some(tag => WORK_TAGS.includes(tag))); break;
-    case 'personal':   list = list.filter(t => t.status !== 'done' && (t.tags||[]).some(tag => PERSONAL_TAGS.includes(tag))); break;
-    default:           list = list.filter(t =>
-                          (t.status !== 'done' || (t.doneAt && t.doneAt.startsWith(today))) &&
-                          (t.tags||[]).includes(currentFilter));
+  }
+
+  // ── axis 2: the tag (topic) slice — combines with whatever view is active ──
+  if (currentTag === 'work') {
+    list = list.filter(t => (t.tags||[]).some(tag => WORK_TAGS.includes(tag)));
+  } else if (currentTag === 'personal') {
+    list = list.filter(t => (t.tags||[]).some(tag => PERSONAL_TAGS.includes(tag)));
+  } else if (currentTag) {
+    list = list.filter(t => (t.tags||[]).includes(currentTag));
   }
 
   if (searchQuery) {
@@ -789,7 +794,7 @@ window.renderCards = function() {
     card.onclick = (e) => {
       if (card._swiped) { e.preventDefault(); e.stopPropagation(); return; }
       localStorage.setItem('currentTaskId', t.id);
-      localStorage.setItem('savedFilter', currentFilter);
+      rememberFilter();
       window.location.href = 'task.html';
     };
     // wrap the card so a left swipe can reveal a delete action behind it
@@ -808,29 +813,55 @@ window.renderCards = function() {
 }
 
 // ── FILTER / SORT ──
-window.filterCards = function(filter, el) {
-  currentFilter = filter;
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active','all','work','personal'));
-  document.querySelectorAll('.stat-chip[data-filter]').forEach(c => c.classList.remove('stat-active'));
-  if (el) {
-    el.classList.add('active');
-    if (filter === 'all') el.classList.add('all');
-    else if (WORK_TAGS.includes(filter) || filter === 'work') el.classList.add('work');
-    else if (PERSONAL_TAGS.includes(filter) || filter === 'personal') el.classList.add('personal');
-    else el.classList.add('all');
-  } else {
-    const chip = document.querySelector(`.stat-chip[data-filter="${filter}"]`);
-    if (chip) chip.classList.add('stat-active');
-  }
+// Highlight state is derived from currentView/currentTag, so each row only ever
+// touches its own buttons — selecting a view never clears the active tag.
+function syncViewTabs() {
+  document.querySelectorAll('#filter-tabs-top .tab').forEach(btn => {
+    const m = (btn.getAttribute('onclick') || '').match(/filterCards\('([^']+)'/);
+    const on = !!m && m[1] === currentView;
+    btn.classList.toggle('active', on);
+    btn.classList.toggle('all', on);
+  });
+  document.querySelectorAll('.stat-chip[data-filter]').forEach(c =>
+    c.classList.toggle('stat-active', c.getAttribute('data-filter') === currentView));
+}
+
+function syncTagTabs() {
+  const inWork = currentTag === 'work' || WORK_TAGS.includes(currentTag);
+  document.querySelectorAll('#filter-tabs-work .tab, #filter-tabs-personal .tab').forEach(btn => {
+    const m = (btn.getAttribute('onclick') || '').match(/filterByTag\('([^']+)'/);
+    const on = !!m && m[1] === currentTag;
+    btn.classList.toggle('active', on);
+    btn.classList.toggle('work', on && inWork);
+    btn.classList.toggle('personal', on && !inWork);
+  });
+}
+
+// Top row — the time/status view
+window.filterCards = function(view) {
+  currentView = view;
+  syncViewTabs();
   renderCards();
+}
+
+// Tag rows — clicking the active tag again clears the tag slice
+window.filterByTag = function(tag) {
+  currentTag = (currentTag === tag) ? null : tag;
+  syncTagTabs();
+  renderCards();
+}
+
+// Remember both axes so returning from a task restores the exact slice
+window.rememberFilter = function() {
+  localStorage.setItem('savedFilter', JSON.stringify({view: currentView, tag: currentTag}));
 }
 
 // ── RESTORE SAVED FILTER (after task navigation) ──
 function saveFilterForNewTask() {
   // If a specific tag is active, pass it to add-task
   const tagFilters = [...WORK_TAGS, ...PERSONAL_TAGS];
-  if (tagFilters.includes(currentFilter)) {
-    localStorage.setItem('newTaskPresetTag', currentFilter);
+  if (tagFilters.includes(currentTag)) {
+    localStorage.setItem('newTaskPresetTag', currentTag);
   } else {
     localStorage.removeItem('newTaskPresetTag');
   }
@@ -1134,7 +1165,7 @@ function addChatBubbleActions(actions) {
 
     if (taskObj) {
       div.innerHTML = `<span>${escHtml(a.msg)}</span>
-        <a href="task.html" onclick="localStorage.setItem('currentTaskId','${taskObj.id}');localStorage.setItem('savedFilter','${currentFilter}')"
+        <a href="task.html" onclick="localStorage.setItem('currentTaskId','${taskObj.id}');rememberFilter()"
            style="font-size:11px;font-weight:700;color:var(--blue);text-decoration:none;white-space:nowrap;padding:2px 7px;border-radius:5px;background:rgba(74,127,181,.12);">→ Open</a>`;
     } else {
       div.textContent = a.msg;
@@ -1148,21 +1179,23 @@ function addChatBubbleActions(actions) {
 
 function restoreSavedFilter() {
   const saved = localStorage.getItem('savedFilter');
-  if (!saved || saved === 'all') return;
+  if (!saved) return;
   localStorage.removeItem('savedFilter');
-  currentFilter = saved;
-  // Find and activate the matching tab
-  document.querySelectorAll('.tab').forEach(btn => {
-    const onclick = btn.getAttribute('onclick') || '';
-    const match = onclick.match(/filterCards\('([^']+)'/);
-    if (match && match[1] === saved) {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active','all','work','personal'));
-      btn.classList.add('active');
-      if (WORK_TAGS.includes(saved) || saved === 'work') btn.classList.add('work');
-      else if (PERSONAL_TAGS.includes(saved) || saved === 'personal') btn.classList.add('personal');
-      else btn.classList.add('all');
-    }
-  });
+  try {
+    const p = JSON.parse(saved);
+    currentView = p.view || 'all';
+    currentTag  = p.tag  || null;
+  } catch(_) {
+    // Legacy value: one filter string — route it to whichever axis it belongs to
+    if (saved === 'work' || saved === 'personal' ||
+        WORK_TAGS.includes(saved) || PERSONAL_TAGS.includes(saved)) currentTag = saved;
+    else currentView = saved;
+  }
+  // The tag may have been renamed or removed (context.html edits the taxonomy)
+  if (currentTag && currentTag !== 'work' && currentTag !== 'personal' &&
+      !WORK_TAGS.includes(currentTag) && !PERSONAL_TAGS.includes(currentTag)) currentTag = null;
+  syncViewTabs();
+  syncTagTabs();
 }
 
 window.onSortModeChange = function() {

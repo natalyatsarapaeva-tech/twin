@@ -102,6 +102,13 @@
     .sort-select:focus{outline:none;}
     .sort-dir{background:none;border:none;font-size:14px;color:var(--blue);font-weight:700;cursor:pointer;font-family:'DM Sans',sans-serif;padding:2px 6px;border-radius:6px;line-height:1;}
 
+    /* ── ONBOARDING BANNER ── */
+    .onboard-banner{margin:12px 20px 0;padding:12px 14px;border-radius:14px;background:var(--lav-pale);display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 2px 8px var(--shadow);}
+    .ob-text{font-size:13px;color:var(--slate);font-weight:500;line-height:1.4;}
+    .ob-actions{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+    .ob-start{font-size:13px;font-weight:600;color:var(--white);background:var(--slate);padding:8px 14px;border-radius:10px;text-decoration:none;white-space:nowrap;}
+    .ob-dismiss{background:none;border:none;font-size:18px;color:var(--text-soft);cursor:pointer;line-height:1;padding:2px 4px;}
+
     /* ── CARDS ── */
     .cards-grid{padding:8px 20px 120px;display:flex;flex-direction:column;gap:10px;flex:1;}
     .no-results{text-align:center;padding:48px 20px;color:var(--text-soft);font-size:15px;}
@@ -289,6 +296,14 @@
       <span class="search-icon">🔍</span>
       <input class="search-box" type="text" placeholder="Search tasks and subtasks…" id="search-input" oninput="onSearch()"/>
       <button class="search-clear" id="search-clear" onclick="clearSearch()">×</button>
+    </div>
+  </div>
+
+  <div class="onboard-banner" id="onboard-banner" style="display:none;">
+    <div class="ob-text">👋 New here? Set up your Twin — profile, tags &amp; first tasks in ~3 min.</div>
+    <div class="ob-actions">
+      <a class="ob-start" href="welcome.html">Start setup</a>
+      <button class="ob-dismiss" onclick="dismissOnboardBanner()" title="Dismiss">×</button>
     </div>
   </div>
 
@@ -539,8 +554,26 @@ async function init() {
   buildFilterTabs();
   loadTasks();
   loadWideContext();
+  maybeShowOnboardBanner();
 }
 init();
+
+// ── ONBOARDING BANNER (first run) ──
+async function maybeShowOnboardBanner() {
+  if (localStorage.getItem('onboarded') || sessionStorage.getItem('ob_dismissed')) return;
+  try {
+    const s = await getDoc(doc(db,'contexts','user'));
+    const d = s.exists() ? s.data() : null;
+    if (d && (d.onboardedAt || (d.profile && d.profile.trim()))) return; // already set up
+  } catch(e) {}
+  const el = document.getElementById('onboard-banner');
+  if (el) el.style.display = 'flex';
+}
+window.dismissOnboardBanner = function() {
+  sessionStorage.setItem('ob_dismissed','1');
+  const el = document.getElementById('onboard-banner');
+  if (el) el.style.display = 'none';
+}
 
 // ── HEADER STATS ──
 function updateHeaderStats() {

@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Welcome · Twin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f0f4f8; --surface:#fff; --surface2:#e8eef5; --border:#dce5ef;
+      --blue:#4a7fb5; --lavender:#8b9fd4; --lav-pale:#dde3f5; --slate:#3d5a7a;
+      --text:#1e2d3d; --text-soft:#6b83a0; --white:#fff; --shadow:rgba(61,90,122,0.12);
+      --green:#5a9e82; --green-pale:#ddf0ea; --red:#c05a5a;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;justify-content:center;}
+    .wrap{width:100%;max-width:620px;display:flex;flex-direction:column;height:100vh;}
+
+    header{padding:22px 20px 12px;}
+    .brand{font-family:'Spectral',serif;font-size:24px;font-weight:600;color:var(--slate);}
+    .brand span{color:var(--lavender);}
+    .sub{font-size:13px;color:var(--text-soft);margin-top:2px;}
+    .steps{display:flex;gap:8px;margin-top:16px;}
+    .step{flex:1;display:flex;flex-direction:column;gap:5px;}
+    .step .bar{height:4px;border-radius:3px;background:var(--surface2);transition:background .3s;}
+    .step.done .bar{background:var(--lavender);}
+    .step .lbl{font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--text-soft);font-weight:600;}
+    .step.done .lbl{color:var(--slate);}
+
+    .chat{flex:1;overflow-y:auto;padding:18px 20px;display:flex;flex-direction:column;gap:10px;}
+    .bubble{max-width:82%;padding:12px 15px;border-radius:16px;font-size:14.5px;line-height:1.5;white-space:pre-wrap;word-wrap:break-word;}
+    .bubble.ai{background:var(--white);color:var(--text);align-self:flex-start;border-bottom-left-radius:4px;box-shadow:0 2px 10px var(--shadow);}
+    .bubble.user{background:var(--lavender);color:var(--white);align-self:flex-end;border-bottom-right-radius:4px;}
+    .bubble.loading{color:var(--text-soft);font-style:italic;}
+    .chips{display:flex;flex-direction:column;gap:5px;align-self:flex-start;max-width:82%;}
+    .chip{font-size:12.5px;padding:6px 11px;border-radius:9px;background:var(--green-pale);color:#2d5e48;font-weight:600;}
+    .chip.err{background:#fbe6e6;color:var(--red);}
+
+    .composer{padding:12px 16px 16px;border-top:1px solid var(--border);background:var(--bg);}
+    .row{display:flex;gap:8px;align-items:flex-end;}
+    textarea{flex:1;resize:none;max-height:120px;padding:12px 14px;border-radius:14px;border:2px solid var(--border);background:var(--white);font-family:'DM Sans',sans-serif;font-size:14.5px;color:var(--text);outline:none;line-height:1.4;}
+    textarea:focus{border-color:var(--lavender);}
+    .send{width:46px;height:46px;flex-shrink:0;border:none;border-radius:14px;background:var(--slate);color:var(--white);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+    .send:disabled{opacity:.5;cursor:default;}
+    .footer-row{display:flex;justify-content:space-between;margin-top:10px;}
+    .flink{background:none;border:none;font-size:13px;color:var(--text-soft);cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:500;}
+    .flink.primary{color:var(--blue);font-weight:600;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">Welcome to <span>Twin</span></div>
+      <div class="sub">Let's set you up in about 3 minutes.</div>
+      <div class="steps" id="steps">
+        <div class="step done" data-k="you"><div class="bar"></div><div class="lbl">You</div></div>
+        <div class="step" data-k="context"><div class="bar"></div><div class="lbl">Context</div></div>
+        <div class="step" data-k="tags"><div class="bar"></div><div class="lbl">Tags</div></div>
+        <div class="step" data-k="tasks"><div class="bar"></div><div class="lbl">Tasks</div></div>
+      </div>
+    </header>
+
+    <div class="chat" id="chat"></div>
+
+    <div class="composer">
+      <div class="row">
+        <textarea id="input" rows="1" placeholder="Type your answer…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();send();}"></textarea>
+        <button class="send" id="sendBtn" onclick="send()">➤</button>
+      </div>
+      <div class="footer-row">
+        <button class="flink" onclick="skip()">Skip setup</button>
+        <button class="flink primary" onclick="finish()">Finish → open tracker</button>
+      </div>
+    </div>
+  </div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/12.12.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyD1uWPrp12lvpyBzXCOq9IrMuTU4uOTRao",
+  authDomain: "natas-kitchen.firebaseapp.com",
+  projectId: "natas-kitchen",
+  storageBucket: "natas-kitchen.firebasestorage.app",
+  messagingSenderId: "756908196325",
+  appId: "1:756908196325:web:e8bab3aac2a322f9436f0c"
+};
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+const WORKER_URL = 'https://task-intake-worker.ntsarapaeva.workers.dev';
+async function gpt(payload){
+  const res = await fetch(`${WORKER_URL}/ai`, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  const data = await res.json();
+  if(!res.ok) throw new Error(data.error?.message || 'AI error');
+  return data;
+}
+
+// ── Tag config (shared meta/tags doc) ──
+const DEFAULT_TAGS = {
+  work:[{id:'dev',label:'Dev',emoji:'💻'},{id:'strategy',label:'Strategy',emoji:'🎯'},{id:'analytics',label:'Analytics',emoji:'📊'},{id:'clients',label:'Clients',emoji:'🤝'},{id:'leads',label:'Leads',emoji:'📣'},{id:'ux',label:'UX',emoji:'🎨'}],
+  personal:[{id:'kids',label:'Kids',emoji:'👶'},{id:'health',label:'Health',emoji:'💚'},{id:'urgent',label:'Urgent',emoji:'🚨'},{id:'ideas',label:'Ideas',emoji:'💡'},{id:'money',label:'Money',emoji:'💰'},{id:'home',label:'Home',emoji:'🏠'},{id:'travel',label:'Travel',emoji:'✈️'},{id:'rest',label:'Rest',emoji:'🌊'},{id:'swedish',label:'Swedish',emoji:'🇸🇪'}]
+};
+let TAGS_CONFIG = DEFAULT_TAGS;
+let WORK_TAGS = [], PERSONAL_TAGS = [];
+function rebuildTags(){ WORK_TAGS = TAGS_CONFIG.work.map(t=>t.id); PERSONAL_TAGS = TAGS_CONFIG.personal.map(t=>t.id); }
+async function loadTags(){
+  try{ const s = await getDoc(doc(db,'meta','tags')); if(s.exists()) TAGS_CONFIG = s.data(); }catch(e){}
+  rebuildTags();
+}
+
+// ── State ──
+const today = new Date().toISOString().split('T')[0];
+let chatHistory = [];
+const milestones = {context:false, tags:false, tasks:false};
+
+// ── Onboarding system prompt ──
+function systemPrompt(){
+  const existing = [...WORK_TAGS, ...PERSONAL_TAGS].join(', ') || '(none yet)';
+  return `You are the setup guide for "Twin", a personal AI task manager. Today: ${today}.
+Your ONLY job is a short, friendly onboarding chat that sets up the user's profile
+(context), a few PERSONAL tags, and their first tasks. Warm, natural tone — but stay
+within these phases and move through them in order, one focused step at a time:
+
+PHASE 1 (already greeted) — Get to know them. Ask, a bit at a time: what they do (work),
+which personal areas matter, current big goals, and any standing constraints (health,
+kids, languages…). A few quick exchanges — don't interrogate.
+
+PHASE 2 — Context. Once you understand them, summarize in 2-4 lines and ASK if you should
+save it to their profile. On yes -> emit update_context (target "user").
+
+PHASE 3 — Tags. Propose a PERSONALIZED starter set based on what THEY told you (about
+6-10 total, split work/personal, each with an emoji). Show the list, let them add/remove,
+ASK before creating. On approval -> emit one create_tag per tag.
+
+PHASE 4 — First tasks. Ask them to brain-dump what's on their mind now. Turn each into a
+task, auto-assign the best tag, show a short preview, and create them (create_task). If a
+durable fact or recurring need surfaces (e.g. scheduling a blood-sugar test -> periodic
+blood-sugar monitoring), ASK whether to also save it to context.
+
+WHEN DONE: tell them they're all set and can open their tracker with the button below.
+
+ACTIONS — emit as COMPACT single-line JSON at the very END of your message, no markdown,
+no code fences, no line breaks inside the JSON:
+{"action":"update_context","target":"user","text":"..."}
+{"action":"create_tag","tag":{"id":"lowercase-id","label":"Label","emoji":"🩸","group":"work|personal"}}
+{"action":"create_task","task":{"title":"...","tags":["tag"],"priority":"none","status":"new","subtasks":[]}}
+
+RULES:
+- Respond in English. Keep replies short.
+- NEVER claim anything was saved — the app shows a green check chip only when an action runs.
+- Emit an action's JSON ONLY AFTER the user agrees to that step.
+- Stay STRICTLY on onboarding. If the user asks anything unrelated (general questions,
+  trivia, coding help, world facts, advice off-topic), politely decline in ONE line and
+  steer back to the current setup step. Do not answer off-topic questions.
+Existing tags already set up: ${existing}`;
+}
+
+// ── UI ──
+const chatEl = document.getElementById('chat');
+function bubble(role, text){
+  const d = document.createElement('div');
+  d.className = 'bubble ' + role;
+  d.textContent = text;
+  chatEl.appendChild(d); chatEl.scrollTop = chatEl.scrollHeight;
+  return d;
+}
+function chips(results){
+  const wrap = document.createElement('div');
+  wrap.className = 'chips';
+  results.forEach(r=>{
+    const c = document.createElement('div');
+    c.className = 'chip' + (r.ok ? '' : ' err');
+    c.textContent = r.msg;
+    wrap.appendChild(c);
+  });
+  chatEl.appendChild(wrap); chatEl.scrollTop = chatEl.scrollHeight;
+}
+function markStep(k){
+  if(milestones[k] !== undefined) milestones[k] = true;
+  document.querySelectorAll('.step').forEach(el=>{ if(milestones[el.dataset.k]) el.classList.add('done'); });
+}
+
+// ── Action parse + execute (subset) ──
+async function parseAndExecute(reply){
+  const blocks = [];
+  const re = /\{\s*"action"\s*:/g; let m;
+  while((m = re.exec(reply)) !== null){
+    const start = m.index; let depth=0,j=start,inStr=false,esc=false,block=null;
+    while(j<reply.length){
+      const ch=reply[j];
+      if(esc){esc=false;j++;continue;}
+      if(ch==='\\'&&inStr){esc=true;j++;continue;}
+      if(ch==='"')inStr=!inStr;
+      if(!inStr){ if(ch==='{')depth++; else if(ch==='}'){depth--; if(depth===0){block=reply.slice(start,j+1);break;}} }
+      j++;
+    }
+    if(block===null) break;
+    blocks.push(block); re.lastIndex = j+1;
+  }
+  if(!blocks.length) return {results:[], clean:reply};
+  const results = [];
+  for(const b of blocks){ try{ results.push(await execAction(JSON.parse(b))); }catch(e){ results.push({ok:false,msg:'⚠️ Action not saved (bad format)'}); } }
+  let clean = reply; blocks.forEach(b=>{ clean = clean.replace(b,''); });
+  clean = clean.replace(/```json/gi,'').replace(/```/g,'').trim();
+  return {results, clean};
+}
+
+async function execAction(action){
+  switch(action.action){
+    case 'update_context': {
+      const target = (action.target||'user').toString().trim();
+      const text = (action.text||'').toString().trim();
+      if(!text) return {ok:false,msg:'❌ No context text'};
+      const tid = target.replace(/^tag-/,'');
+      if(target!=='user' && ![...WORK_TAGS,...PERSONAL_TAGS].includes(tid)) return {ok:false,msg:`❌ Unknown context target: ${target}`};
+      const docId = target==='user' ? 'user' : 'tag-'+tid;
+      let existing='';
+      try{ const s=await getDoc(doc(db,'contexts',docId)); if(s.exists()) existing=s.data().profile||''; }catch(e){}
+      const appended = (existing?existing.trim()+'\n\n':'') + `[added by assistant · ${today}] ${text}`;
+      await setDoc(doc(db,'contexts',docId), {profile:appended, updatedAt:new Date().toISOString()}, {merge:true});
+      markStep('context');
+      return {ok:true, msg:`✅ Context saved → ${target==='user'?'your profile':'#'+tid}`};
+    }
+    case 'create_tag': {
+      const tg = action.tag||{};
+      const group = tg.group==='work'?'work':(tg.group==='personal'?'personal':null);
+      if(!group) return {ok:false,msg:'❌ Tag needs group work|personal'};
+      const id = (tg.id||tg.label||'').toString().toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+      if(!id) return {ok:false,msg:'❌ Tag id missing'};
+      if([...WORK_TAGS,...PERSONAL_TAGS].includes(id)) return {ok:false,msg:`⚠️ Tag "${id}" already exists`};
+      const label = tg.label || (id.charAt(0).toUpperCase()+id.slice(1));
+      const emoji = tg.emoji || '🏷️';
+      TAGS_CONFIG[group] = [...(TAGS_CONFIG[group]||[]), {id,label,emoji}];
+      await setDoc(doc(db,'meta','tags'), TAGS_CONFIG);
+      rebuildTags(); markStep('tags');
+      return {ok:true, msg:`✅ Tag created: ${emoji} ${label} (${group})`};
+    }
+    case 'create_task': {
+      const id = 'task-'+Date.now()+'-'+Math.random().toString(36).slice(2,5);
+      const t = action.task||{};
+      const task = {
+        id, title:t.title||'Untitled', description:t.description||'',
+        tags:t.tags||[], deadline:t.deadline||null, nextAction:t.nextAction||null,
+        priority:t.priority||'none', status:'new',
+        subtasks:(t.subtasks||[]).map(s=>({title:s.title||'',note:s.note||'',dueDate:s.dueDate||null,status:'new',assigned:s.assigned||'',createdAt:new Date().toISOString()})),
+        subtaskMode:'parallel', notes:'', recurring:null, createdAt:new Date().toISOString(), source:null
+      };
+      await setDoc(doc(db,'tasks',id), task);
+      markStep('tasks');
+      return {ok:true, msg:`✅ Task created: "${task.title}"`};
+    }
+    default:
+      return {ok:false, msg:`⚠️ Unknown action: ${action.action}`};
+  }
+}
+
+// ── Send loop ──
+let busy = false;
+window.send = async function(){
+  const input = document.getElementById('input');
+  const text = input.value.trim();
+  if(!text || busy) return;
+  input.value=''; input.style.height='auto';
+  bubble('user', text);
+  chatHistory.push({role:'user', content:text});
+
+  busy = true;
+  document.getElementById('sendBtn').disabled = true;
+  const loading = bubble('ai','…'); loading.classList.add('loading');
+  try{
+    const data = await gpt({model:'gpt-4o', max_tokens:900, temperature:0.5,
+      messages:[{role:'system',content:systemPrompt()}, ...chatHistory]});
+    const reply = data.choices[0].message.content;
+    chatHistory.push({role:'assistant', content:reply});
+    const {results, clean} = await parseAndExecute(reply);
+    loading.remove();
+    if(clean) bubble('ai', clean);
+    if(results.length) chips(results);
+  }catch(e){
+    loading.remove();
+    bubble('ai','❌ '+e.message);
+  }
+  busy = false;
+  document.getElementById('sendBtn').disabled = false;
+  input.focus();
+}
+
+async function markOnboarded(){
+  localStorage.setItem('onboarded','1');
+  try{ await setDoc(doc(db,'contexts','user'), {onboardedAt:new Date().toISOString()}, {merge:true}); }catch(e){}
+}
+window.finish = async function(){ await markOnboarded(); window.location.href='index.html'; }
+window.skip = async function(){ await markOnboarded(); window.location.href='index.html'; }
+
+// autosize textarea
+document.getElementById('input').addEventListener('input', function(){ this.style.height='auto'; this.style.height=Math.min(this.scrollHeight,120)+'px'; });
+
+// ── Boot ──
+await loadTags();
+bubble('ai', "Hi! I'm your Twin setup guide 👋\nIn a few minutes we'll set up your profile, a handful of tags that fit you, and your first tasks.\n\nTo start — tell me a bit about yourself: what do you do, and which areas of life do you want to keep on top of?");
+chatHistory.push({role:'assistant', content:"Hi! I'm your Twin setup guide. Let's set up your profile, tags, and first tasks. Tell me about yourself: what you do and which areas of life you want to keep on top of."});
+document.getElementById('input').focus();
+</script>
+</body>
+</html>

@@ -66,11 +66,14 @@ or paste it into **Firestore → Rules** in the console. Each user can read/writ
 only their own `apps/twin/users/{uid}` subtree; everything else is denied by
 default.
 
-⚠️ A Firestore database has **one** ruleset for all collections. This file only
-governs `apps/twin/**`. If another app shares the `natas-kitchen` project and
-needs client access, **merge** its rules into the same file before deploying —
-don't let this file replace a broader ruleset, and don't add a catch-all deny
-(it would lock the sibling app out).
+⚠️ A Firestore database has **one** ruleset for all collections. The
+`natas-kitchen` project is shared with the **Kitchen** app (households / recipes
+/ nutrition, rooted at the top level). `firestore.rules` therefore contains
+**both** apps' rules in one file: the Kitchen blocks (root `users/`,
+`households/`, `recipes/`, `nutrition/`) plus Twin's `apps/twin/users/{uid}`
+block. The two never share a path, so they coexist with no catch-all deny. If
+the Kitchen rules change on their side, re-merge so this file stays the single
+source of truth for what's deployed.
 
 ## Cloudflare Worker — still writes to the root (follow-up)
 

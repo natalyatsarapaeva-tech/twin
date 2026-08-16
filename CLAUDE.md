@@ -398,7 +398,11 @@ Principle: the tracker surfaces the **next available action**, not the project t
 - **Always syntax-check** JS after changes: `node --check file.js`
 - **voice.js** must be included via `<script src="voice.js">` (not module) — it sets `window.*` globals
 - **Firebase writes** use `setDoc` (not `updateDoc`) for full document replacement to avoid stale fields
-- **All user-facing text in English** — system prompts instruct GPT to always respond in English
+- **Static UI chrome is in English**; the AI assistants (index chat, welcome onboarding,
+  task-page panel, add-task bulk/image import) now **mirror the user's language** — they
+  reply and create task/subtask/tag/context content in whatever language the user wrote in.
+  Tag **ids** stay latin-lowercase slugs regardless (create_tag falls back to a random
+  latin id if the label is non-latin); tag **labels** follow the user's language.
 - **Tag summaries** are fire-and-forget — never block UI on them
 
 -----

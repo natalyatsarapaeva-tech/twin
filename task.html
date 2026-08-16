@@ -1010,7 +1010,7 @@ ${task.subtasks.map((s,i) =>
     ? `\n=== RELATED TASKS (same tags) ===\n` + siblingTasks.map(t => buildTaskDump(t)).join('\n')
     : '';
 
-  return `You are an AI task management assistant. Today: ${today}. Always respond in English. All content you create (task titles, subtasks, notes) must be in English regardless of input language.
+  return `You are an AI task management assistant. Today: ${today}. Respond in the SAME language the user writes in, and create all content (task titles, subtasks, notes) in that same language.
 
 ${mainDump}${siblingDump}
 

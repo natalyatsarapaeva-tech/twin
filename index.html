@@ -1167,7 +1167,7 @@ ${subs||'    none'}`;
   const sectionD = bgTasks ? `\n═══ [D] OTHER HIGH PRIORITY TASKS ═══\n${bgTasks}` : '';
 
   return `You are a personal AI task management assistant. Today: ${today}.
-Always respond in English. All content you create must be in English regardless of input language.
+Respond in the SAME language the user writes in, and create all content (task titles, subtasks, notes, tag labels, context) in that same language. Tag ids must still be a short latin-lowercase slug even when the label is in another language.
 ${topic ? `Current topic: ${topic}` : ''}
 ${sectionA}${sectionB}${sectionC}${sectionD}
 
@@ -1458,9 +1458,9 @@ async function executeAction(action) {
       const tg = action.tag || {};
       const group = tg.group === 'work' ? 'work' : (tg.group === 'personal' ? 'personal' : null);
       if (!group) return {ok:false, msg:'❌ Tag needs group work|personal'};
-      const id = (tg.id || tg.label || '').toString().toLowerCase().trim()
+      let id = (tg.id || tg.label || '').toString().toLowerCase().trim()
         .replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
-      if (!id) return {ok:false, msg:'❌ Tag id missing'};
+      if (!id) id = 'tag-' + Math.random().toString(36).slice(2,7); // non-latin label → safe fallback id
       if ([...WORK_TAGS, ...PERSONAL_TAGS].includes(id)) return {ok:false, msg:`⚠️ Tag "${id}" already exists`};
       const label = tg.label || (id.charAt(0).toUpperCase() + id.slice(1));
       const emoji = tg.emoji || '🏷️';

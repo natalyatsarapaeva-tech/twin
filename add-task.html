@@ -403,7 +403,7 @@ window.analyzeBatch = async function() {
 
 For each task:
 {
-  "title": "task title in English",
+  "title": "task title in the SAME language as the input",
   "tags": ["tag1", "tag2"],
   "deadline": "YYYY-MM-DD or null",
   "nextAction": "YYYY-MM-DD or null",
@@ -413,7 +413,7 @@ For each task:
 
 Available tags — Work: ${WORK_TAGS.join(', ')} | Personal: ${PERSONAL_TAGS.join(', ')}
 
-Auto-detect tags from context. Translate any non-English input to English. Today: ${new Date().toISOString().split('T')[0]}.`;
+Auto-detect tags from context. Keep task titles in the same language the user wrote them; do NOT translate. Today: ${new Date().toISOString().split('T')[0]}.`;
 
   try {
     const data = await gpt({model:'gpt-4o',max_tokens:2000,messages:[
@@ -534,7 +534,7 @@ window.analyzeBatchImage = async function(){
   btn.textContent='⏳ Analyzing image…';
   try {
     const data=await gpt({model:'gpt-4o',max_tokens:1500,messages:[
-      {role:'system',content:'You are a task extraction assistant. Extract all tasks, to-dos, action items from images (handwriting, screenshots, notes). Return ONLY a JSON array, no markdown: [{"title":"...","tags":[],"dueDate":null,"priority":"none","status":"new"}]. Translate everything to English.'},
+      {role:'system',content:'You are a task extraction assistant. Extract all tasks, to-dos, action items from images (handwriting, screenshots, notes). Return ONLY a JSON array, no markdown: [{"title":"...","tags":[],"dueDate":null,"priority":"none","status":"new"}]. Keep each title in the same language as written in the image; do NOT translate.'},
       {role:'user',content:[
         {type:'image_url',image_url:{url:`data:image/jpeg;base64,${base64}`,detail:'high'}},
         {type:'text',text:'Extract all tasks and action items from this image as a JSON array.'}

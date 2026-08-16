@@ -136,7 +136,7 @@ no code fences, no line breaks inside the JSON:
 {"action":"create_task","task":{"title":"...","tags":["tag"],"priority":"none","status":"new","subtasks":[]}}
 
 RULES:
-- Respond in English. Keep replies short.
+- Respond in the SAME language the user writes in, and create all content (context, tag labels, task titles) in that language. Tag ids must still be a short latin-lowercase slug. Keep replies short.
 - NEVER claim anything was saved — the app shows a green check chip only when an action runs.
 - Emit an action's JSON ONLY AFTER the user agrees to that step.
 - Stay STRICTLY on onboarding. If the user asks anything unrelated (general questions,
@@ -215,8 +215,8 @@ async function execAction(action){
       const tg = action.tag||{};
       const group = tg.group==='work'?'work':(tg.group==='personal'?'personal':null);
       if(!group) return {ok:false,msg:'❌ Tag needs group work|personal'};
-      const id = (tg.id||tg.label||'').toString().toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
-      if(!id) return {ok:false,msg:'❌ Tag id missing'};
+      let id = (tg.id||tg.label||'').toString().toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+      if(!id) id = 'tag-' + Math.random().toString(36).slice(2,7); // non-latin label → safe fallback id
       if([...WORK_TAGS,...PERSONAL_TAGS].includes(id)) return {ok:false,msg:`⚠️ Tag "${id}" already exists`};
       const label = tg.label || (id.charAt(0).toUpperCase()+id.slice(1));
       const emoji = tg.emoji || '🏷️';

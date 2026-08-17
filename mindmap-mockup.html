@@ -271,7 +271,10 @@ function drawDivider(g,defs,dark,phase){
       el('path',{d:leftDisc,fill:L},g); el('path',{d:rightDisc,fill:R},g);
     }
   } else {
-    if(S==='line'){
+    if(S==='halves'){
+      // thin divider in the same colour as the concentric rings
+      el('line',{x1:CX,y1:CY-R_OUT,x2:CX,y2:CY+R_OUT,stroke:getVar('--grid'),'stroke-width':1.5,'stroke-linecap':'round'},g);
+    } else if(S==='line'){
       el('line',{x1:CX,y1:CY-R_OUT,x2:CX,y2:CY+R_OUT,stroke:getVar('--cap'),'stroke-width':2.5,'stroke-linecap':'round'},g);
     } else if(S==='seam'){
       const lg=el('linearGradient',{id:'seam',gradientUnits:'userSpaceOnUse',x1:CX-46,y1:0,x2:CX+46,y2:0},defs);

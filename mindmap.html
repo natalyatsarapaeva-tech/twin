@@ -352,8 +352,12 @@ function render(){
   document.getElementById('stat').textContent=(showDone?allTasks.length:activeTotal)+(showDone?' tasks':' active');
 
   const defs=el('defs',{},sky);
-  // ── background layer: all wedges first, then scale rings, then the divider ──
+  // ── background layer: half tints, wedges, scale rings, then the divider ──
   const bgG=el('g',{},sky);
+  // warm / cool zone tints behind the halves: work (left) cool, personal (right) warm
+  const Rbg=R_OUT+18;
+  el('path',{d:`M${CX},${CY-Rbg} A${Rbg},${Rbg} 0 0,0 ${CX},${CY+Rbg} Z`,fill:dark?'rgba(120,150,190,.09)':'rgba(70,95,135,.06)'},bgG);
+  el('path',{d:`M${CX},${CY-Rbg} A${Rbg},${Rbg} 0 0,1 ${CX},${CY+Rbg} Z`,fill:dark?'rgba(235,190,120,.09)':'rgba(214,158,86,.07)'},bgG);
   items.forEach(it=>{
     const stops=gradStops(it.hue,dark), gid='g'+it.i;
     const grad=el('radialGradient',{id:gid,gradientUnits:'userSpaceOnUse',cx:CX,cy:CY,r:R_OUT},defs);
@@ -364,8 +368,8 @@ function render(){
       'fill-opacity':it.count===0?.4:1,'data-tid':it.tag.id},bgG);
   });
   for(let c=1;c<=SCALE_MAX;c++) el('circle',{cx:CX,cy:CY,r:fRad(c),fill:'none',stroke:getVar('--grid'),'stroke-width':1},bgG);
-  // vertical divider (same grey as the ray-end caps) separating personal | work
-  el('line',{x1:CX,y1:CY-R_OUT,x2:CX,y2:CY+R_OUT,stroke:getVar('--cap'),'stroke-width':2.5,'stroke-linecap':'round'},bgG);
+  // thin vertical divider in the same colour as the concentric rings
+  el('line',{x1:CX,y1:CY-R_OUT,x2:CX,y2:CY+R_OUT,stroke:getVar('--grid'),'stroke-width':1.5,'stroke-linecap':'round'},bgG);
 
   // ── foreground layer: dots, caps, counts, labels — never covered by a neighbour wedge ──
   const frontG=el('g',{},sky);

@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sun Mind Map</title>
+  <style>
+    :root{
+      --serif:'Spectral','Iowan Old Style',Georgia,'Times New Roman',serif;
+      --sans:'DM Sans',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+      --bg:#f3f1ea; --bg2:#eae7dd; --ink:#22282f; --ink-soft:#7b8595;
+      --panel:#ffffff; --line:#ddd8cc; --shadow:rgba(40,50,70,.16);
+      --sun1:#fff0c4; --sun2:#ffcf6b;
+      --grid:rgba(90,100,120,.14);
+      --cap:#9aa1ab; --leader:rgba(90,100,120,.45);
+    }
+    @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+      --bg:#12161d; --bg2:#0c1017; --ink:#e9edf4; --ink-soft:#8c98a9;
+      --panel:#171d26; --line:#28313d; --shadow:rgba(0,0,0,.55);
+      --sun1:#ffe6a3; --sun2:#f2b64e;
+      --grid:rgba(180,195,215,.13);
+      --cap:#7f8a99; --leader:rgba(170,185,205,.4);
+    }}
+    :root[data-theme="dark"]{
+      --bg:#12161d; --bg2:#0c1017; --ink:#e9edf4; --ink-soft:#8c98a9;
+      --panel:#171d26; --line:#28313d; --shadow:rgba(0,0,0,.55);
+      --sun1:#ffe6a3; --sun2:#f2b64e;
+      --grid:rgba(180,195,215,.13);
+      --cap:#7f8a99; --leader:rgba(170,185,205,.4);
+    }
+
+    *{margin:0;padding:0;box-sizing:border-box;}
+    html,body{height:100%;}
+    body{font-family:var(--sans);color:var(--ink);
+      background:radial-gradient(1200px 900px at 50% 44%,var(--bg2),var(--bg) 72%);overflow:hidden;}
+    #app{display:flex;flex-direction:column;height:100vh;}
+
+    .top-bar{display:flex;align-items:center;gap:14px;padding:14px 22px;flex-shrink:0;
+      border-bottom:1px solid var(--line);background:color-mix(in srgb,var(--panel) 70%,transparent);backdrop-filter:blur(8px);}
+    .brand{display:flex;align-items:baseline;gap:10px;}
+    .brand .mark{font-size:18px;}
+    .brand h1{font-family:var(--serif);font-weight:600;font-size:20px;}
+    .brand .sub{font-size:12px;color:var(--ink-soft);}
+    .top-spacer{flex:1;}
+    .toggle{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink-soft);cursor:pointer;
+      user-select:none;padding:6px 10px;border-radius:9px;border:1px solid var(--line);background:var(--panel);}
+    .toggle input{accent-color:#5a9e82;}
+    .icon-btn{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--panel);
+      color:var(--ink);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;}
+    .icon-btn:hover{border-color:var(--ink-soft);}
+
+    .main{display:flex;flex:1;min-height:0;position:relative;}
+    #stage{flex:1;display:flex;align-items:center;justify-content:center;min-width:0;position:relative;padding:10px;}
+    svg#sky{width:min(88vmin,880px);height:min(88vmin,880px);display:block;overflow:visible;}
+
+    .ray{cursor:pointer;}
+    .wedge{transition:opacity .2s ease;}
+    .ray.dim .wedge,.ray.dim .cap,.ray.dim .count,.ray.dim .taskdot,.ray.dim .tag-label{opacity:.28;}
+    .taskdot{cursor:pointer;transition:opacity .2s;}
+    .taskdot:hover{stroke:var(--ink);}
+    .count{font-family:var(--sans);font-weight:700;pointer-events:none;}
+    .tag-label{font-family:var(--sans);font-weight:600;pointer-events:none;}
+    /* per-task names: hidden until ray hover or the "show tasks" toggle */
+    .tasklabel,.leader{opacity:0;transition:opacity .15s;pointer-events:none;}
+    .tasklabel{font-family:var(--sans);font-size:11px;font-weight:500;
+      paint-order:stroke;stroke:var(--panel);stroke-width:3px;stroke-linejoin:round;}
+    .leader{stroke:var(--leader);stroke-width:1;}
+    .ray:hover .tasklabel,.ray:hover .leader{opacity:1;}
+    body.show-tasks .tasklabel,body.show-tasks .leader{opacity:1;}
+
+    @keyframes breathe{0%,100%{opacity:.5;}50%{opacity:.85;}}
+    .glow{animation:breathe 6s ease-in-out infinite;}
+    @media (prefers-reduced-motion:reduce){.glow{animation:none;}}
+
+    .legend{position:absolute;left:50%;bottom:16px;transform:translateX(-50%) translateY(6px);display:flex;align-items:center;
+      gap:16px;flex-wrap:wrap;justify-content:center;background:color-mix(in srgb,var(--panel) 94%,transparent);
+      border:1px solid var(--line);border-radius:13px;padding:9px 16px;box-shadow:0 4px 18px var(--shadow);
+      font-size:11.5px;color:var(--ink-soft);max-width:92%;
+      opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;}
+    .legend.show{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0);}
+    .icon-btn.on{border-color:var(--ink-soft);background:var(--bg2);}
+    .legend .grp{display:flex;align-items:center;gap:7px;}
+    .legend .dot{width:11px;height:11px;border-radius:50%;display:inline-block;}
+    .legend .dot.ring{background:transparent;border:1.7px solid var(--ink-soft);}
+    .legend .dot.ring.bold{border-width:3px;}
+    .legend .dot.done{background:#9aa1ab;}
+    .legend .caps{width:24px;height:0;border-top:2.5px solid var(--cap);border-radius:2px;}
+    .legend b{color:var(--ink);font-weight:600;}
+
+    #panel{width:0;flex-shrink:0;overflow:hidden;background:var(--panel);border-left:1px solid var(--line);
+      transition:width .32s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;}
+    #panel.open{width:352px;}
+    .p-head{padding:18px 20px 14px;position:relative;}
+    .p-accent{position:absolute;left:0;top:0;bottom:0;width:5px;}
+    .p-kind{font-size:10px;text-transform:uppercase;letter-spacing:.16em;font-weight:700;margin-bottom:7px;}
+    .p-title{font-family:var(--serif);font-size:23px;line-height:1.2;margin-bottom:12px;}
+    .p-chips{display:flex;flex-wrap:wrap;gap:6px;}
+    .chip{font-size:12px;font-weight:600;padding:4px 11px;border-radius:9px;}
+    .p-close{position:absolute;top:14px;right:14px;width:28px;height:28px;border:none;background:none;
+      color:var(--ink-soft);font-size:22px;cursor:pointer;line-height:1;}
+    .p-body{padding:6px 20px 22px;overflow-y:auto;flex:1;}
+    .p-sec{font-size:11px;text-transform:uppercase;letter-spacing:.13em;font-weight:700;color:var(--ink-soft);margin:16px 0 9px;}
+    .row{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:10px;background:var(--bg);
+      margin-bottom:6px;font-size:13.5px;cursor:pointer;transition:background .15s;}
+    .row:hover{background:var(--bg2);}
+    .row .rnum{font-size:11px;font-weight:700;color:var(--ink-soft);width:16px;text-align:center;flex-shrink:0;font-variant-numeric:tabular-nums;}
+    .row .rdot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
+    .row .rt{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+    .row.done .rt{text-decoration:line-through;opacity:.55;}
+    .row .rdue{font-size:11px;color:var(--ink-soft);flex-shrink:0;font-variant-numeric:tabular-nums;}
+    .add-btn{width:100%;margin-top:14px;padding:11px;border-radius:11px;border:2px dashed var(--line);
+      background:transparent;color:var(--ink-soft);font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;}
+    .add-btn:hover{border-color:var(--ink-soft);color:var(--ink);}
+    .open-btn{width:100%;margin-top:8px;padding:11px;border-radius:11px;border:none;color:#fff;
+      font-family:var(--sans);font-size:14px;font-weight:600;cursor:pointer;}
+    .note{font-size:12.5px;color:var(--ink-soft);line-height:1.55;margin-top:10px;}
+
+    @media (max-width:760px){
+      svg#sky{width:96vw;height:96vw;}
+      #panel{position:fixed;left:0;right:0;bottom:0;top:auto;width:100%;height:0;border-left:none;
+        border-top:1px solid var(--line);border-radius:18px 18px 0 0;box-shadow:0 -8px 26px var(--shadow);z-index:40;transition:height .3s;}
+      #panel.open{width:100%;height:62vh;}
+      .legend{bottom:auto;top:8px;}
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="top-bar">
+    <div class="brand"><span class="mark">☀️</span><h1>Mind Map</h1><span class="sub">колесо баланса · макет</span></div>
+    <div class="top-spacer"></div>
+    <label class="toggle"><input type="checkbox" id="show-tasks"> Показать задачи</label>
+    <label class="toggle"><input type="checkbox" id="show-done"> Показать выполненные</label>
+    <button class="icon-btn" id="legend-btn" title="Легенда">?</button>
+    <button class="icon-btn" id="theme-btn" title="Сменить тему">◐</button>
+  </div>
+
+  <div class="main">
+    <div id="stage">
+      <svg id="sky" viewBox="0 0 1000 1000" role="img" aria-label="Колесо задач"></svg>
+      <div class="legend">
+        <div class="grp"><b>Длина луча</b> = число задач (лог. шкала)</div>
+        <div class="grp"><span class="caps"></span>граница нагрузки</div>
+        <div class="grp"><span class="dot ring"></span>Задача</div>
+        <div class="grp"><span class="dot ring bold"></span>Высокий приоритет</div>
+        <div class="grp"><span class="dot done"></span>Выполнено</div>
+        <div class="grp">срочные — ближе к центру · одинаковая срочность — рядом</div>
+      </div>
+    </div>
+
+    <aside id="panel">
+      <div class="p-head">
+        <div class="p-accent" id="p-accent"></div>
+        <button class="p-close" id="p-close">×</button>
+        <div class="p-kind" id="p-kind"></div>
+        <div class="p-title" id="p-title"></div>
+        <div class="p-chips" id="p-chips"></div>
+      </div>
+      <div class="p-body" id="p-body"></div>
+    </aside>
+  </div>
+</div>
+
+<script>
+/* ─────────────────────────────────────────────
+   SAMPLE DATA (mock) — real app pulls from Firestore
+   due: 'YYYY-MM-DD' | null   (today = 2026-08-16)
+   ───────────────────────────────────────────── */
+const T=(title,pr,due,done)=>({title,pr:pr||'none',due:due||null,done:!!done});
+const DATA=[
+  // ── WORK ──
+  {id:'dev',label:'Dev',emoji:'💻',group:'work',tasks:[
+    T('Fix recurring roll-forward bug','high','2026-08-18'),T('Redesign mind map view','high','2026-08-18'),
+    T('Add PWA push notifications','med','2026-08-25'),T('Refactor store.js namespacing','med'),
+    T('Write firestore.rules tests','low'),T('Voice input RU accuracy','low'),
+    T('Upgrade Firebase SDK','none'),T('Ship worker slack signing','none',null,true),
+  ]},
+  {id:'clients',label:'Clients',emoji:'🤝',group:'work',tasks:[
+    T('Follow up invoice #204','med','2026-08-16'),T('Call with Nordwind','high','2026-08-17'),
+    T('Send Q3 proposal','high','2026-08-19'),T('Onboarding deck for Aurea','med'),
+    T('Kickoff notes','none',null,true),
+  ]},
+  {id:'strategy',label:'Strategy',emoji:'🎯',group:'work',tasks:[
+    T('2026 roadmap draft','med','2026-08-30'),T('Pricing model v2','med'),T('Competitor scan','low'),
+  ]},
+  {id:'analytics',label:'Analytics',emoji:'📊',group:'work',tasks:[
+    T('Weekly retention report','med','2026-08-16'),T('Funnel dashboard','low'),
+  ]},
+  {id:'leads',label:'Leads',emoji:'📣',group:'work',tasks:[
+    T('Refresh landing copy','med','2026-08-22'),T('LinkedIn outreach batch','med'),
+    T('Webinar planning','low'),T('CRM cleanup','none'),
+  ]},
+  {id:'ux',label:'UX',emoji:'🎨',group:'work',tasks:[
+    T('Pastel palette tokens','low','2026-08-21'),
+  ]},
+  // ── PERSONAL ──
+  {id:'kids',label:'Kids',emoji:'👶',group:'personal',tasks:[
+    T('School forms deadline','high','2026-08-18'),T('Dentist appointment','med','2026-08-20'),
+    T('Swim lessons signup','low','2026-08-24'),T('Birthday party plan','med','2026-08-28'),
+    T('Buy autumn shoes','low'),T('Read together evenings','none'),
+  ]},
+  {id:'health',label:'Health',emoji:'💚',group:'personal',tasks:[
+    T('Renew gym pass','low','2026-08-16'),T('Annual check-up','med','2026-08-26'),T('Sleep routine','none'),
+  ]},
+  {id:'urgent',label:'Urgent',emoji:'🚨',group:'personal',tasks:[
+    T('Pay rent','high','2026-08-16'),T('Passport renewal','high','2026-08-19'),
+  ]},
+  {id:'ideas',label:'Ideas',emoji:'💡',group:'personal',tasks:[
+    T('Newsletter about AI tools','med'),T('Blog: sun mind maps','low'),
+    T('Side project: recipe app','low'),T('Sketch garden layout','none'),T('Course on typography','none'),
+  ]},
+  {id:'money',label:'Money',emoji:'💰',group:'personal',tasks:[
+    T('Review subscriptions','med','2026-08-23'),T('Move savings','low'),
+  ]},
+  {id:'home',label:'Home',emoji:'🏠',group:'personal',tasks:[
+    T('Fix kitchen tap','med','2026-08-17'),T('Order air filter','low','2026-08-21'),
+    T('Declutter garage','low'),T('Repaint hallway','none'),
+  ]},
+  {id:'travel',label:'Travel',emoji:'✈️',group:'personal',tasks:[
+    T('Book autumn trip','low','2026-08-29'),
+  ]},
+  {id:'rest',label:'Rest',emoji:'🌊',group:'personal',tasks:[
+    T('Weekend digital detox','low'),T('Plan spa day','none'),
+  ]},
+  {id:'swedish',label:'Swedish',emoji:'🇸🇪',group:'personal',tasks:[
+    T('Duolingo streak','med'),T('Watch SVT with subs','low'),T('Vocabulary 20 words','none'),
+  ]},
+];
+
+/* ─────────────────────────────────────────────
+   GEOMETRY
+   ───────────────────────────────────────────── */
+const SVGNS='http://www.w3.org/2000/svg';
+const CX=500,CY=500;
+const R_HUB=28, R_IN=40, R_OUT=380;
+const R_MIN=74;             // radius of the most-urgent (rank 1) dot — pulled ~2× closer to centre
+const GAP=12, PAD=1.4;      // degrees between sectors
+
+const sky=document.getElementById('sky');
+let showDone=false, selectedIdx=null;
+let SCALE_MAX=8;            // adaptive: = task count of the busiest ray (set each render)
+
+function el(n,a,p){const e=document.createElementNS(SVGNS,n);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
+function polar(r,deg){const a=deg*Math.PI/180;return[CX+r*Math.cos(a),CY+r*Math.sin(a)];}
+function annularSector(r0,r1,a0,a1){
+  const[x0,y0]=polar(r0,a0),[x1,y1]=polar(r1,a0),[x2,y2]=polar(r1,a1),[x3,y3]=polar(r0,a1);
+  const lg=(a1-a0)>180?1:0;
+  return `M${x0},${y0} L${x1},${y1} A${r1},${r1} 0 ${lg},1 ${x2},${y2} L${x3},${y3} A${r0},${r0} 0 ${lg},0 ${x0},${y0} Z`;
+}
+function arcPath(r,a0,a1){const[x0,y0]=polar(r,a0),[x1,y1]=polar(r,a1);const lg=(a1-a0)>180?1:0;return `M${x0},${y0} A${r},${r} 0 ${lg},1 ${x1},${y1}`;}
+
+// Logarithmic scale, adaptive to the busiest ray. Anchored so the most-urgent
+// rank sits at R_MIN (close to the centre) and SCALE_MAX tasks reach the rim;
+// still compresses high counts and packs dots tighter toward the periphery.
+function fRad(rank){
+  const r=Math.min(Math.max(rank,1),SCALE_MAX);
+  const den=Math.log(1+SCALE_MAX)-Math.log(2);
+  if(den<=0) return R_MIN;                       // busiest ray has ≤1 task
+  return R_MIN+(R_OUT-R_MIN)*(Math.log(1+r)-Math.log(2))/den;
+}
+
+function theme(){const e=document.documentElement.getAttribute('data-theme');return e||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');}
+function getVar(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
+
+// same saturation for every ray — only hue differs. Load is shown by length, not colour.
+function gradStops(hue,dark){return dark?[`hsl(${hue} 38% 30%)`,`hsl(${hue} 56% 52%)`]:[`hsl(${hue} 54% 87%)`,`hsl(${hue} 66% 64%)`];}
+function tagInk(hue,dark){return dark?`hsl(${hue} 60% 82%)`:`hsl(${hue} 52% 34%)`;}
+function tagSoft(hue,dark){return dark?`hsl(${hue} 34% 22%)`:`hsl(${hue} 60% 95%)`;}
+
+const PR_RANK={high:0,med:1,low:2,none:3};
+const DONE_GREY='#9aa1ab';
+// active task = transparent dot with a near-white ring (thicker for high priority);
+// done task = plain grey, regardless of priority
+function dotAttrs(t,dark){
+  if(t.done) return {fill:dark?'rgba(150,160,175,.5)':'rgba(150,158,170,.5)',stroke:dark?'rgba(150,160,175,.75)':'rgba(120,130,145,.6)',sw:1.3,r:5.2};
+  const ring=dark?'rgba(238,244,252,.92)':'rgba(255,255,255,.96)';
+  return {fill:'transparent',stroke:ring,sw:t.pr==='high'?3.2:1.7,r:t.pr==='high'?6.4:5.4};
+}
+function statusCol(t,hue,dark){return t.done?DONE_GREY:tagInk(hue,dark);}
+
+function visibleTasks(tag){return showDone?tag.tasks:tag.tasks.filter(t=>!t.done);}
+function urgKey(t){return t.due||'∞';}
+function sortByUrgency(list){
+  return [...list].sort((a,b)=>{
+    const ua=a.due?Date.parse(a.due):Infinity, ub=b.due?Date.parse(b.due):Infinity;
+    return ua-ub || PR_RANK[a.pr]-PR_RANK[b.pr];
+  });
+}
+// group consecutive tasks that share the same urgency → they sit side by side
+function bucketize(sorted){
+  const out=[]; let i=0;
+  while(i<sorted.length){
+    let j=i; const k=urgKey(sorted[i]);
+    while(j<sorted.length&&urgKey(sorted[j])===k) j++;
+    out.push({items:sorted.slice(i,j),p0:i,p1:j-1}); i=j;
+  }
+  return out;
+}
+function fmtDue(iso){if(!iso)return'';const[y,m,d]=iso.split('-');const mo=['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];return `${+d} ${mo[+m-1]}`;}
+
+function layout(){
+  const N=DATA.length, avail=360-2*GAP, per=avail/N;
+  const workCount=DATA.filter(d=>d.group==='work').length;
+  let a=-90+GAP/2;
+  return DATA.map((tag,i)=>{
+    if(i===workCount) a+=GAP;
+    const a0=a,a1=a+per,mid=(a0+a1)/2; a=a1;
+    const tasks=sortByUrgency(visibleTasks(tag));
+    const hue=Math.round(((mid+90)%360+360)%360);
+    return {tag,i,a0,a1,mid,per,tasks,count:tasks.length,hue};
+  });
+}
+
+// spread horizontal labels vertically so they don't overlap (1-D declutter, centre-preserving)
+function spreadY(ys,gap){
+  const n=ys.length; if(!n) return ys;
+  const idx=ys.map((y,i)=>i).sort((p,q)=>ys[p]-ys[q]);
+  const out=ys.slice();
+  for(let s=1;s<n;s++){const a=idx[s-1],b=idx[s];if(out[b]-out[a]<gap) out[b]=out[a]+gap;}
+  // if pushed past bottom, shift the whole stack up
+  const last=idx[n-1], first=idx[0];
+  const overflow=out[last]-(CY+R_OUT+70);
+  if(overflow>0) idx.forEach(i=>out[i]-=overflow);
+  const under=(CY-R_OUT-70)-out[first];
+  if(under>0) idx.forEach(i=>out[i]+=under);
+  return out;
+}
+
+function render(){
+  sky.innerHTML='';
+  const dark=theme()==='dark';
+  const defs=el('defs',{},sky);
+  const items=layout();
+  SCALE_MAX=Math.max(1,...items.map(it=>it.count)); // longest ray reaches the rim
+
+  // faint scale rings — one per task step, up to the busiest ray
+  const gridG=el('g',{},sky);
+  for(let c=1;c<=SCALE_MAX;c++) el('circle',{cx:CX,cy:CY,r:fRad(c),fill:'none',stroke:getVar('--grid'),'stroke-width':1},gridG);
+
+  const raysG=el('g',{},sky);
+  items.forEach(it=>{
+    const stops=gradStops(it.hue,dark), gid='g'+it.i;
+    const grad=el('radialGradient',{id:gid,gradientUnits:'userSpaceOnUse',cx:CX,cy:CY,r:R_OUT},defs);
+    el('stop',{offset:(R_IN/R_OUT),'stop-color':stops[0]},grad);
+    el('stop',{offset:1,'stop-color':stops[1]},grad);
+
+    const rayG=el('g',{class:'ray'},raysG); rayG.dataset.idx=it.i;
+    const outerR=fRad(it.count); // colour ends at the load boundary
+
+    el('path',{class:'wedge',d:annularSector(R_IN,outerR,it.a0+PAD,it.a1-PAD),fill:`url(#${gid})`},rayG);
+
+    // place task dots: radius by urgency rank (log), equal-urgency tasks fan sideways
+    const dots=[];
+    bucketize(it.tasks).forEach(b=>{
+      const meanRank=(b.p0+b.p1)/2+1;
+      const r=fRad(meanRank);
+      const m=b.items.length;
+      const stepDeg=m>1?Math.min(11,(it.per-2*PAD-3)/m):0;
+      b.items.forEach((task,bi)=>{
+        const ang=it.mid+stepDeg*(bi-(m-1)/2);
+        const[dx,dy]=polar(r,ang);
+        const da=dotAttrs(task,dark);
+        const dot=el('circle',{class:'taskdot',cx:dx,cy:dy,r:da.r,fill:da.fill,stroke:da.stroke,'stroke-width':da.sw},rayG);
+        el('title',{},dot).textContent=`${task.title}${task.due?' · '+fmtDue(task.due):''}`;
+        dot.addEventListener('click',e=>{e.stopPropagation();openTask(it,task);});
+        dots.push({task,dx,dy});
+      });
+    });
+
+    // grey contour cap at the tip → shows how long the ray is
+    if(it.count>0){
+      el('path',{class:'cap',d:arcPath(outerR,it.a0+PAD,it.a1-PAD),fill:'none',
+        stroke:getVar('--cap'),'stroke-width':2.5,'stroke-linecap':'round'},rayG);
+      const[nx,ny]=polar(outerR+13,it.mid);
+      const num=el('text',{class:'count',x:nx,y:ny,'text-anchor':'middle','dominant-baseline':'middle',
+        'font-size':13,fill:getVar('--ink-soft')},rayG);
+      num.textContent=it.count;
+    }
+
+    // horizontal task-name labels beside their dots (on the side the ray points), de-overlapped vertically
+    const side=Math.cos(it.mid*Math.PI/180)>=0?1:-1; // +1 right, -1 left
+    const baseYs=spreadY(dots.map(d=>d.dy),15);
+    dots.forEach((d,k)=>{
+      const y=baseYs[k], lx=d.dx+side*12;
+      el('line',{class:'leader',x1:d.dx,y1:d.dy,x2:lx-side*3,y2:y},rayG);
+      const tx=el('text',{class:'tasklabel',x:lx,y:y+3,'text-anchor':side>0?'start':'end',fill:getVar('--ink')},rayG);
+      tx.textContent=trunc(d.task.title,22);
+      el('title',{},tx).textContent=d.task.title;
+    });
+
+    // tag label at the rim, horizontal
+    const[lx,ly]=polar(R_OUT+30,it.mid);
+    const lab=el('text',{class:'tag-label',x:lx,y:ly+4,'text-anchor':Math.abs(Math.cos(it.mid*Math.PI/180))<0.25?'middle':(Math.cos(it.mid*Math.PI/180)>=0?'start':'end'),
+      'font-size':13,fill:tagInk(it.hue,dark)},rayG);
+    lab.textContent=`${it.tag.emoji} ${it.tag.label}`;
+
+    rayG.addEventListener('click',()=>openTag(it));
+    rayG.addEventListener('mouseenter',()=>dimOthers(it.i));
+    rayG.addEventListener('mouseleave',()=>dimOthers(null));
+  });
+
+  // centre hub
+  const g=el('radialGradient',{id:'sun',cx:'40%',cy:'36%',r:'72%'},defs);
+  el('stop',{offset:'0%','stop-color':getVar('--sun1')},g);
+  el('stop',{offset:'100%','stop-color':getVar('--sun2')},g);
+  const gg=el('radialGradient',{id:'glow',cx:'50%',cy:'50%',r:'50%'},defs);
+  el('stop',{offset:'0%','stop-color':getVar('--sun2'),'stop-opacity':.5},gg);
+  el('stop',{offset:'100%','stop-color':getVar('--sun2'),'stop-opacity':0},gg);
+  el('circle',{class:'glow',cx:CX,cy:CY,r:R_HUB+22,fill:'url(#glow)','pointer-events':'none'},sky);
+  el('circle',{cx:CX,cy:CY,r:R_HUB,fill:'url(#sun)',stroke:getVar('--sun2'),'stroke-width':2},sky);
+
+  applyDim();
+}
+
+function trunc(s,n){return s.length>n?s.slice(0,Math.max(1,n-1))+'…':s;}
+function dimOthers(hoverIdx){
+  const focus=hoverIdx!==null?hoverIdx:selectedIdx;
+  document.querySelectorAll('.ray').forEach(r=>r.classList.toggle('dim',focus!==null&&+r.dataset.idx!==focus));
+}
+function applyDim(){dimOthers(null);}
+
+/* ── PANEL ── */
+const panel=document.getElementById('panel');
+function openPanel(){panel.classList.add('open');}
+function closePanel(){panel.classList.remove('open');selectedIdx=null;applyDim();}
+document.getElementById('p-close').addEventListener('click',closePanel);
+
+function openTag(it){
+  selectedIdx=it.i;applyDim();
+  const dark=theme()==='dark',tag=it.tag;
+  const active=it.tasks, done=tag.tasks.filter(t=>t.done);
+  document.getElementById('p-accent').style.background=tagInk(it.hue,dark);
+  const kind=document.getElementById('p-kind');
+  kind.textContent=tag.group==='work'?'Рабочий тэг':'Личный тэг'; kind.style.color=tagInk(it.hue,dark);
+  document.getElementById('p-title').textContent=`${tag.emoji} ${tag.label}`;
+  document.getElementById('p-chips').innerHTML=
+    `<span class="chip" style="background:${tagSoft(it.hue,dark)};color:${tagInk(it.hue,dark)}">${it.count} задач</span>`+
+    `<span class="chip" style="background:var(--bg);color:var(--ink-soft)">${done.length} готово</span>`;
+  let html=`<div class="p-sec">По срочности — сверху самое срочное</div>`;
+  html+=active.length?active.map((t,i)=>rowHtml(t,i+1)).join(''):`<div class="note">Нет активных задач</div>`;
+  if(showDone&&done.length) html+=`<div class="p-sec">Выполнено</div>`+done.map(t=>rowHtml(t)).join('');
+  html+=`<button class="open-btn" style="background:${tagInk(it.hue,dark)}">→ Открыть область</button>`;
+  html+=`<button class="add-btn">+ Добавить задачу в «${tag.label}»</button>`;
+  document.getElementById('p-body').innerHTML=html;
+  openPanel();
+}
+function rowHtml(t,n){
+  const rdot=t.done
+    ? `<span class="rdot" style="background:${DONE_GREY}"></span>`
+    : `<span class="rdot" style="background:transparent;border:${t.pr==='high'?'3px':'1.7px'} solid var(--ink-soft)"></span>`;
+  return `<div class="row ${t.done?'done':''}">${n?`<span class="rnum">${n}</span>`:'<span class="rnum"></span>'}`+
+    `${rdot}<span class="rt">${esc(t.title)}</span>`+
+    `${t.due?`<span class="rdue">${fmtDue(t.due)}</span>`:''}</div>`;
+}
+function openTask(it,task){
+  selectedIdx=it.i;applyDim();
+  const dark=theme()==='dark';
+  const sc=statusCol(task,it.hue,dark);
+  document.getElementById('p-accent').style.background=sc;
+  const kind=document.getElementById('p-kind'); kind.textContent='Задача'; kind.style.color=tagInk(it.hue,dark);
+  document.getElementById('p-title').textContent=task.title;
+  const prLabel={high:'Высокий приоритет',med:'Средний',low:'Обычный',none:'Без приоритета'}[task.pr];
+  document.getElementById('p-chips').innerHTML=
+    `<span class="chip" style="background:${sc}22;color:${sc}">${task.done?'Готово':prLabel}</span>`+
+    (task.due?`<span class="chip" style="background:var(--bg);color:var(--ink-soft)">📅 ${fmtDue(task.due)}</span>`:'')+
+    `<span class="chip" style="background:${tagSoft(it.hue,dark)};color:${tagInk(it.hue,dark)}">${it.tag.emoji} ${it.tag.label}</span>`;
+  document.getElementById('p-body').innerHTML=
+    `<div class="note">Часть области <b>${it.tag.emoji} ${it.tag.label}</b>. В реальном приложении здесь подзадачи, заметки и статус.</div>`+
+    `<button class="open-btn" style="background:${sc}">→ Открыть задачу</button>`+
+    `<button class="add-btn">+ Добавить подзадачу</button>`;
+  openPanel();
+}
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+/* ── CONTROLS ── */
+document.getElementById('show-tasks').addEventListener('change',e=>document.body.classList.toggle('show-tasks',e.target.checked));
+document.getElementById('show-done').addEventListener('change',e=>{showDone=e.target.checked;render();if(selectedIdx!==null)closePanel();});
+document.getElementById('theme-btn').addEventListener('click',()=>{const c=theme();document.documentElement.setAttribute('data-theme',c==='dark'?'light':'dark');render();if(selectedIdx!==null)closePanel();});
+
+// legend: hidden by default, shown on demand
+const legend=document.querySelector('.legend'), legendBtn=document.getElementById('legend-btn');
+function toggleLegend(on){const show=on!==undefined?on:!legend.classList.contains('show');legend.classList.toggle('show',show);legendBtn.classList.toggle('on',show);}
+legendBtn.addEventListener('click',e=>{e.stopPropagation();toggleLegend();});
+document.addEventListener('click',e=>{if(legend.classList.contains('show')&&!legend.contains(e.target)&&e.target!==legendBtn)toggleLegend(false);});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')toggleLegend(false);});
+matchMedia('(prefers-color-scheme:dark)').addEventListener('change',()=>{if(!document.documentElement.getAttribute('data-theme'))render();});
+
+render();
+</script>
+</body>
+</html>

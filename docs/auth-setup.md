@@ -75,16 +75,17 @@ block. The two never share a path, so they coexist with no catch-all deny. If
 the Kitchen rules change on their side, re-merge so this file stays the single
 source of truth for what's deployed.
 
-## Cloudflare Worker — still writes to the root (follow-up)
+## Cloudflare Worker — now an OpenAI proxy only
 
-The email/Slack intake worker was intentionally **not** changed in this
-iteration. It still writes new tasks to root `tasks/` via the Admin service
-account (which bypasses security rules). Until it's updated, tasks arriving from
-email/Slack will **not** appear in your per-user store.
+The worker was slimmed to a single `/ai` endpoint that proxies OpenAI (keeping
+the key server-side). Its email/Slack/push intake — which wrote to the legacy
+root `tasks/` — was removed, so the worker no longer touches Firestore at all
+and needs no Firebase/Postmark/Slack/VAPID secrets (only `OPENAI_API_KEY`).
 
-Follow-up to make it per-user:
-- add a `OWNER_UID` secret (your Firebase Auth uid) to the worker;
-- change the Firestore REST paths from `documents/tasks/{id}`,
-  `documents/meta/tags`, `documents/pushSubscriptions/...` to
-  `documents/apps/twin/users/{OWNER_UID}/...`;
-- `wrangler deploy` from `worker/`.
+Because nothing writes to the root anymore, the "root vs per-user" mismatch is
+moot. If email/Slack intake is ever revived, rebuild it as its own worker that
+writes per-user under `documents/apps/twin/users/{OWNER_UID}/...`.
+
+Client push code (`pwa.js` `window.twinPush`, the `index.html` notification
+modal) is now dormant: it calls the removed `/push/*` endpoints and fails
+silently. The service-worker registration for PWA install/offline still works.

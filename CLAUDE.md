@@ -29,10 +29,9 @@ repo root/
 ├── firestore.rules     — per-user security rules (deploy separately)
 ├── docs/auth-setup.md  — auth & migration setup guide
 ├── CLAUDE.md           — this file
+├── wrangler.jsonc      — Cloudflare Worker config (root)
 └── worker/
-    ├── task-intake-worker.js   — Cloudflare Worker: email + Slack → GPT → Firebase
-    ├── wrangler.toml           — Cloudflare Worker config
-    └── README.md               — deployment instructions
+    └── task-intake-worker.js   — Cloudflare Worker: OpenAI proxy (/ai) only
 ```
 
 -----
@@ -46,7 +45,7 @@ repo root/
 |AI                 |OpenAI GPT-4o via `/v1/chat/completions`     |
 |Deep research      |Multi-step GPT agent (3 sequential calls)    |
 |Voice input        |Web Speech API (browser-native, no API key)  |
-|Inbound email/Slack|Cloudflare Worker → Postmark webhook         |
+|AI proxy           |Cloudflare Worker `/ai` (keeps OpenAI key server-side) |
 |Auth               |Firebase Auth (Google sign-in), per-user stores under `users/{uid}/` |
 
 **Firebase project:** `natas-kitchen`
@@ -69,8 +68,9 @@ per user. The paths below are relative to `apps/twin/users/{uid}/` —
 `store.js`'s wrapped `collection()`/`doc()` prepend that whole prefix
 automatically, so call sites still read `collection(db,'tasks')`. The namespace
 is one constant (`APP_ROOT` in `store.js`).
-(The Cloudflare Worker still writes the legacy **root** `tasks/` for now — see
-`docs/auth-setup.md`.)
+(The Cloudflare Worker no longer touches Firestore — it was slimmed to an
+OpenAI proxy only. Legacy **root** `tasks/`/`contexts/`/`meta/` remain as the
+owner's pre-migration originals; nothing writes there now.)
 
 ```
 apps/twin/users/{uid}/
@@ -291,25 +291,28 @@ Principle: the tracker surfaces the **next available action**, not the project t
 
 ## Cloudflare Worker (worker/)
 
-**Endpoints:**
+Slimmed to a single job: an **OpenAI proxy** so the API key stays a server-side
+secret instead of shipping in the static site. Every AI feature POSTs here.
 
-- `POST /email` — Postmark inbound webhook
-- `POST /slack` — Slack slash command `/task`
-- `POST /test` — manual testing
+**Endpoint:**
 
-**Environment variables (Cloudflare secrets, never in code):**
+- `POST /ai` — proxies to OpenAI `chat/completions` (origin-checked to the app's
+  GitHub Pages host + localhost)
+
+**Secret (Cloudflare):**
 
 - `OPENAI_API_KEY`
-- `FIREBASE_PROJECT_ID` = `natas-kitchen`
-- `FIREBASE_CLIENT_EMAIL` = service account email
-- `FIREBASE_PRIVATE_KEY` = full PEM private key
-- `ALLOWED_SENDERS` = comma-separated allowed email addresses
-- `POSTMARK_WEBHOOK_TOKEN` = optional verification token
-- `SLACK_SIGNING_SECRET` = optional but recommended — enables Slack request signature verification
-- `SLACK_CHANNEL_ID` = optional — restricts Slack Events API intake to one channel
-- `TEST_TOKEN` = optional — required as `{"token": "..."}` in `/test` body when set
 
-**Deploy:** `wrangler deploy` from `worker/` directory.
+**Deploy:** `wrangler deploy` (config in root `wrangler.jsonc`).
+
+**Removed (were unused/broken):** the `/email` + `/slack` intake, `/test`,
+`/push/*`, and the hourly notification cron — along with their Firestore/JWT/VAPID
+plumbing and secrets. The old intake wrote to the legacy **root** `tasks/`. If
+revived, rebuild it as its own worker writing per-user under
+`apps/twin/users/{uid}/...`. Client push code (`pwa.js` `window.twinPush`,
+`index.html` notification modal) is now dormant — it calls the removed `/push/*`
+endpoints and fails silently; the service-worker registration for PWA
+install/offline still works.
 
 -----
 

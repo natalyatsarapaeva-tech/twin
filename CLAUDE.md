@@ -22,7 +22,10 @@ repo root/
 ├── index.html          — main page: task list, filters, AI chat drawer, monthly suggestions
 ├── task.html           — task detail: subtasks, notes, status, AI panel, deep research draft
 ├── add-task.html       — new task form: tags, repeat/recurring, AI bulk import
-├── mindmap.html        — mind map view: tags → tasks → subtasks, split-screen detail
+├── mindmap.html        — "sun / balance-wheel" view: tags are coloured rays around a
+│                         central sun; ray length (log scale) = task count, most-urgent
+│                         tasks sit nearest the centre; split-screen detail panel
+├── mindmap-mockup.html — standalone design mockup of the wheel (sample data, no Firestore)
 ├── context.html        — wide context page: user profile + per-tag AI context/summaries
 ├── voice.js            — shared voice input utility (Web Speech API, EN/RU toggle)
 ├── store.js            — shared Firebase init + Google auth gate + per-user Firestore namespacing

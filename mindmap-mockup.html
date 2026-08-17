@@ -11,22 +11,22 @@
       --bg:#f3f1ea; --bg2:#eae7dd; --ink:#22282f; --ink-soft:#7b8595;
       --panel:#ffffff; --line:#ddd8cc; --shadow:rgba(40,50,70,.16);
       --sun1:#fff0c4; --sun2:#ffcf6b;
-      --grid:rgba(90,100,120,.16); --sep:rgba(255,255,255,.85);
-      --cap:#1c2128;
+      --grid:rgba(90,100,120,.14);
+      --cap:#9aa1ab; --leader:rgba(90,100,120,.45);
     }
     @media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
       --bg:#12161d; --bg2:#0c1017; --ink:#e9edf4; --ink-soft:#8c98a9;
       --panel:#171d26; --line:#28313d; --shadow:rgba(0,0,0,.55);
       --sun1:#ffe6a3; --sun2:#f2b64e;
-      --grid:rgba(180,195,215,.14); --sep:rgba(18,22,29,.9);
-      --cap:#f2f5fa;
+      --grid:rgba(180,195,215,.13);
+      --cap:#7f8a99; --leader:rgba(170,185,205,.4);
     }}
     :root[data-theme="dark"]{
       --bg:#12161d; --bg2:#0c1017; --ink:#e9edf4; --ink-soft:#8c98a9;
       --panel:#171d26; --line:#28313d; --shadow:rgba(0,0,0,.55);
       --sun1:#ffe6a3; --sun2:#f2b64e;
-      --grid:rgba(180,195,215,.14); --sep:rgba(18,22,29,.9);
-      --cap:#f2f5fa;
+      --grid:rgba(180,195,215,.13);
+      --cap:#7f8a99; --leader:rgba(170,185,205,.4);
     }
 
     *{margin:0;padding:0;box-sizing:border-box;}
@@ -50,34 +50,35 @@
     .icon-btn:hover{border-color:var(--ink-soft);}
 
     .main{display:flex;flex:1;min-height:0;position:relative;}
-    #stage{flex:1;display:flex;align-items:center;justify-content:center;min-width:0;position:relative;}
-    svg#sky{width:min(94vmin,940px);height:min(94vmin,940px);display:block;}
+    #stage{flex:1;display:flex;align-items:center;justify-content:center;min-width:0;position:relative;padding:10px;}
+    svg#sky{width:min(88vmin,880px);height:min(88vmin,880px);display:block;overflow:visible;}
 
     .ray{cursor:pointer;}
     .wedge{transition:opacity .2s ease;}
-    .ray.dim .wedge,.ray.dim .cap,.ray.dim .count,.ray.dim .taskdot{opacity:.3;}
-    .cap{transition:opacity .2s;}
+    .ray.dim .wedge,.ray.dim .cap,.ray.dim .count,.ray.dim .taskdot,.ray.dim .tag-label{opacity:.28;}
     .taskdot{cursor:pointer;transition:opacity .2s;}
     .taskdot:hover{stroke:var(--ink);stroke-width:2.5;}
     .count{font-family:var(--sans);font-weight:700;pointer-events:none;}
     .tag-label{font-family:var(--sans);font-weight:600;pointer-events:none;}
-    /* per-task name labels: hidden until ray hover or global toggle */
-    .tasklabel{font-family:var(--sans);font-size:10px;font-weight:500;opacity:0;pointer-events:none;
-      transition:opacity .15s;paint-order:stroke;stroke:var(--panel);stroke-width:3px;stroke-linejoin:round;}
-    .ray:hover .tasklabel{opacity:1;}
-    body.show-tasks .tasklabel{opacity:1;}
+    /* per-task names: hidden until ray hover or the "show tasks" toggle */
+    .tasklabel,.leader{opacity:0;transition:opacity .15s;pointer-events:none;}
+    .tasklabel{font-family:var(--sans);font-size:11px;font-weight:500;
+      paint-order:stroke;stroke:var(--panel);stroke-width:3px;stroke-linejoin:round;}
+    .leader{stroke:var(--leader);stroke-width:1;}
+    .ray:hover .tasklabel,.ray:hover .leader{opacity:1;}
+    body.show-tasks .tasklabel,body.show-tasks .leader{opacity:1;}
 
     @keyframes breathe{0%,100%{opacity:.5;}50%{opacity:.85;}}
     .glow{animation:breathe 6s ease-in-out infinite;}
     @media (prefers-reduced-motion:reduce){.glow{animation:none;}}
 
     .legend{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);display:flex;align-items:center;
-      gap:18px;flex-wrap:wrap;justify-content:center;background:color-mix(in srgb,var(--panel) 88%,transparent);
+      gap:16px;flex-wrap:wrap;justify-content:center;background:color-mix(in srgb,var(--panel) 88%,transparent);
       border:1px solid var(--line);border-radius:13px;padding:9px 16px;box-shadow:0 4px 18px var(--shadow);
       font-size:11.5px;color:var(--ink-soft);max-width:92%;}
     .legend .grp{display:flex;align-items:center;gap:7px;}
     .legend .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
-    .legend .caps{width:26px;height:0;border-top:4px solid var(--cap);border-radius:2px;}
+    .legend .caps{width:24px;height:0;border-top:2.5px solid var(--cap);border-radius:2px;}
     .legend b{color:var(--ink);font-weight:600;}
 
     #panel{width:0;flex-shrink:0;overflow:hidden;background:var(--panel);border-left:1px solid var(--line);
@@ -131,13 +132,13 @@
     <div id="stage">
       <svg id="sky" viewBox="0 0 1000 1000" role="img" aria-label="Колесо задач"></svg>
       <div class="legend">
-        <div class="grp"><b>Длина луча</b> = число задач</div>
+        <div class="grp"><b>Длина луча</b> = число задач (лог. шкала)</div>
         <div class="grp"><span class="caps"></span>граница нагрузки</div>
         <div class="grp"><span class="dot" style="background:#e0857f"></span>Высокий</div>
         <div class="grp"><span class="dot" style="background:#e0b45f"></span>Средний</div>
         <div class="grp"><span class="dot" style="background:#8fa8c6"></span>Обычный</div>
         <div class="grp"><span class="dot" style="background:#79b79b"></span>Готово</div>
-        <div class="grp">срочные — ближе к центру</div>
+        <div class="grp">срочные — ближе к центру · одинаковая срочность — рядом</div>
       </div>
     </div>
 
@@ -163,7 +164,7 @@ const T=(title,pr,due,done)=>({title,pr:pr||'none',due:due||null,done:!!done});
 const DATA=[
   // ── WORK ──
   {id:'dev',label:'Dev',emoji:'💻',group:'work',tasks:[
-    T('Fix recurring roll-forward bug','high','2026-08-18'),T('Redesign mind map view','high','2026-08-20'),
+    T('Fix recurring roll-forward bug','high','2026-08-18'),T('Redesign mind map view','high','2026-08-18'),
     T('Add PWA push notifications','med','2026-08-25'),T('Refactor store.js namespacing','med'),
     T('Write firestore.rules tests','low'),T('Voice input RU accuracy','low'),
     T('Upgrade Firebase SDK','none'),T('Ship worker slack signing','none',null,true),
@@ -221,12 +222,13 @@ const DATA=[
 ];
 
 /* ─────────────────────────────────────────────
-   GEOMETRY + RENDER
+   GEOMETRY
    ───────────────────────────────────────────── */
 const SVGNS='http://www.w3.org/2000/svg';
 const CX=500,CY=500;
-const R_HUB=30, R_IN=38, R_OUT=432;
-const GAP=12, PAD=1.4; // degrees
+const R_HUB=28, R_IN=40, R_OUT=380;
+const GAP=12, PAD=1.4;      // degrees between sectors
+const CAP=20;               // task count that reaches the rim (fixed scale)
 
 const sky=document.getElementById('sky');
 let showDone=false, selectedIdx=null;
@@ -240,13 +242,14 @@ function annularSector(r0,r1,a0,a1){
 }
 function arcPath(r,a0,a1){const[x0,y0]=polar(r,a0),[x1,y1]=polar(r,a1);const lg=(a1-a0)>180?1:0;return `M${x0},${y0} A${r},${r} 0 ${lg},1 ${x1},${y1}`;}
 
+// FIXED logarithmic scale: rank (1..) → radius; compresses high counts, packs dots outward
+function fRad(rank){const r=Math.min(Math.max(rank,0),CAP);return R_IN+(R_OUT-R_IN)*Math.log(1+r)/Math.log(1+CAP);}
+
 function theme(){const e=document.documentElement.getAttribute('data-theme');return e||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');}
 function getVar(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}
 
-// same saturation for every ray — only hue differs (full spectrum). Load is NOT encoded by colour.
-function gradStops(hue,dark){
-  return dark?[`hsl(${hue} 38% 30%)`,`hsl(${hue} 56% 52%)`]:[`hsl(${hue} 54% 87%)`,`hsl(${hue} 66% 64%)`];
-}
+// same saturation for every ray — only hue differs. Load is shown by length, not colour.
+function gradStops(hue,dark){return dark?[`hsl(${hue} 38% 30%)`,`hsl(${hue} 56% 52%)`]:[`hsl(${hue} 54% 87%)`,`hsl(${hue} 66% 64%)`];}
 function tagInk(hue,dark){return dark?`hsl(${hue} 60% 82%)`:`hsl(${hue} 52% 34%)`;}
 function tagSoft(hue,dark){return dark?`hsl(${hue} 34% 22%)`:`hsl(${hue} 60% 95%)`;}
 
@@ -255,11 +258,22 @@ const PR_COLOR={high:'#e0857f',med:'#e0b45f',low:'#8fa8c6',none:'#8fa8c6'};
 function dotColor(t){return t.done?'#79b79b':(PR_COLOR[t.pr]||'#8fa8c6');}
 
 function visibleTasks(tag){return showDone?tag.tasks:tag.tasks.filter(t=>!t.done);}
+function urgKey(t){return t.due||'∞';}
 function sortByUrgency(list){
   return [...list].sort((a,b)=>{
     const ua=a.due?Date.parse(a.due):Infinity, ub=b.due?Date.parse(b.due):Infinity;
     return ua-ub || PR_RANK[a.pr]-PR_RANK[b.pr];
   });
+}
+// group consecutive tasks that share the same urgency → they sit side by side
+function bucketize(sorted){
+  const out=[]; let i=0;
+  while(i<sorted.length){
+    let j=i; const k=urgKey(sorted[i]);
+    while(j<sorted.length&&urgKey(sorted[j])===k) j++;
+    out.push({items:sorted.slice(i,j),p0:i,p1:j-1}); i=j;
+  }
+  return out;
 }
 function fmtDue(iso){if(!iso)return'';const[y,m,d]=iso.split('-');const mo=['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];return `${+d} ${mo[+m-1]}`;}
 
@@ -272,8 +286,23 @@ function layout(){
     const a0=a,a1=a+per,mid=(a0+a1)/2; a=a1;
     const tasks=sortByUrgency(visibleTasks(tag));
     const hue=Math.round(((mid+90)%360+360)%360);
-    return {tag,i,a0,a1,mid,tasks,count:tasks.length,hue};
+    return {tag,i,a0,a1,mid,per,tasks,count:tasks.length,hue};
   });
+}
+
+// spread horizontal labels vertically so they don't overlap (1-D declutter, centre-preserving)
+function spreadY(ys,gap){
+  const n=ys.length; if(!n) return ys;
+  const idx=ys.map((y,i)=>i).sort((p,q)=>ys[p]-ys[q]);
+  const out=ys.slice();
+  for(let s=1;s<n;s++){const a=idx[s-1],b=idx[s];if(out[b]-out[a]<gap) out[b]=out[a]+gap;}
+  // if pushed past bottom, shift the whole stack up
+  const last=idx[n-1], first=idx[0];
+  const overflow=out[last]-(CY+R_OUT+70);
+  if(overflow>0) idx.forEach(i=>out[i]-=overflow);
+  const under=(CY-R_OUT-70)-out[first];
+  if(under>0) idx.forEach(i=>out[i]+=under);
+  return out;
 }
 
 function render(){
@@ -281,64 +310,66 @@ function render(){
   const dark=theme()==='dark';
   const defs=el('defs',{},sky);
   const items=layout();
-  const maxRings=Math.max(1,...items.map(it=>it.count));
-  const step=(R_OUT-R_IN)/maxRings;
 
-  // grid rings (scale)
+  // faint scale rings at reference counts
   const gridG=el('g',{},sky);
-  for(let k=1;k<=maxRings;k++){
-    el('circle',{cx:CX,cy:CY,r:R_IN+k*step,fill:'none',stroke:getVar('--grid'),'stroke-width':1},gridG);
-  }
+  [1,3,5,10,20].forEach(c=>el('circle',{cx:CX,cy:CY,r:fRad(c),fill:'none',stroke:getVar('--grid'),'stroke-width':1},gridG));
 
   const raysG=el('g',{},sky);
   items.forEach(it=>{
-    const stops=gradStops(it.hue,dark);
-    const gid='g'+it.i;
+    const stops=gradStops(it.hue,dark), gid='g'+it.i;
     const grad=el('radialGradient',{id:gid,gradientUnits:'userSpaceOnUse',cx:CX,cy:CY,r:R_OUT},defs);
     el('stop',{offset:(R_IN/R_OUT),'stop-color':stops[0]},grad);
     el('stop',{offset:1,'stop-color':stops[1]},grad);
 
     const rayG=el('g',{class:'ray'},raysG); rayG.dataset.idx=it.i;
-    const outerR=R_IN+it.count*step; // colour ends here
+    const outerR=fRad(it.count); // colour ends at the load boundary
 
-    // wedge, filled only up to the outermost task
     el('path',{class:'wedge',d:annularSector(R_IN,outerR,it.a0+PAD,it.a1-PAD),fill:`url(#${gid})`},rayG);
 
-    // task dots along ray centre: urgent (inner) → not urgent (outer), even spacing
-    it.tasks.forEach((task,k)=>{
-      const rr=R_IN+(k+1)*step-step*0.5; // centred inside each ring band
-      const[dx,dy]=polar(rr,it.mid);
-      const dot=el('circle',{class:'taskdot',cx:dx,cy:dy,r:task.pr==='high'?6.5:5.2,
-        fill:dotColor(task),stroke:dark?'rgba(255,255,255,.2)':'rgba(255,255,255,.85)','stroke-width':1.5},rayG);
-      el('title',{},dot).textContent=`${task.title}${task.due?' · '+fmtDue(task.due):''}`;
-      dot.addEventListener('click',e=>{e.stopPropagation();openTask(it,task);});
-
-      // name label (hidden until hover / toggle). Alternate sides so neighbours don't collide.
-      const lg=el('g',{transform:`translate(${dx},${dy}) rotate(${normRot(it.mid)})`},rayG);
-      const flip=it.mid>90&&it.mid<270;
-      const side=(k%2?1:-1)*10;
-      const tx=el('text',{class:'tasklabel',x:flip?-9:9,y:side+3,'text-anchor':flip?'end':'start',fill:getVar('--ink')},lg);
-      tx.textContent=trunc(task.title, Math.floor(step*2/6));
-      el('title',{},tx).textContent=task.title;
+    // place task dots: radius by urgency rank (log), equal-urgency tasks fan sideways
+    const dots=[];
+    bucketize(it.tasks).forEach(b=>{
+      const meanRank=(b.p0+b.p1)/2+1;
+      const r=fRad(meanRank);
+      const m=b.items.length;
+      const stepDeg=m>1?Math.min(11,(it.per-2*PAD-3)/m):0;
+      b.items.forEach((task,bi)=>{
+        const ang=it.mid+stepDeg*(bi-(m-1)/2);
+        const[dx,dy]=polar(r,ang);
+        const dot=el('circle',{class:'taskdot',cx:dx,cy:dy,r:task.pr==='high'?6.5:5.2,
+          fill:dotColor(task),stroke:dark?'rgba(255,255,255,.2)':'rgba(255,255,255,.85)','stroke-width':1.5},rayG);
+        el('title',{},dot).textContent=`${task.title}${task.due?' · '+fmtDue(task.due):''}`;
+        dot.addEventListener('click',e=>{e.stopPropagation();openTask(it,task);});
+        dots.push({task,dx,dy});
+      });
     });
 
-    // black contour cap at the tip → shows how long the ray is
+    // grey contour cap at the tip → shows how long the ray is
     if(it.count>0){
       el('path',{class:'cap',d:arcPath(outerR,it.a0+PAD,it.a1-PAD),fill:'none',
-        stroke:getVar('--cap'),'stroke-width':4,'stroke-linecap':'round'},rayG);
-      // count number near the tip
-      const[nx,ny]=polar(outerR-step*0.5,it.mid);
+        stroke:getVar('--cap'),'stroke-width':2.5,'stroke-linecap':'round'},rayG);
+      const[nx,ny]=polar(outerR+13,it.mid);
       const num=el('text',{class:'count',x:nx,y:ny,'text-anchor':'middle','dominant-baseline':'middle',
-        'font-size':14,fill:getVar('--ink'),'paint-order':'stroke',stroke:dark?stops[0]:'rgba(255,255,255,.85)','stroke-width':3},rayG);
+        'font-size':13,fill:getVar('--ink-soft')},rayG);
       num.textContent=it.count;
     }
 
-    // tag label just outside the max rim, along the ray
-    const[px,py]=polar(R_OUT+22,it.mid);
-    const flip=it.mid>90&&it.mid<270;
-    const lg=el('g',{transform:`translate(${px},${py}) rotate(${normRot(it.mid)})`},rayG);
-    const lab=el('text',{class:'tag-label',x:flip?-4:4,y:4,'text-anchor':flip?'end':'start',
-      'font-size':13,fill:tagInk(it.hue,dark)},lg);
+    // horizontal task-name labels beside their dots (on the side the ray points), de-overlapped vertically
+    const side=Math.cos(it.mid*Math.PI/180)>=0?1:-1; // +1 right, -1 left
+    const baseYs=spreadY(dots.map(d=>d.dy),15);
+    dots.forEach((d,k)=>{
+      const y=baseYs[k], lx=d.dx+side*12;
+      el('line',{class:'leader',x1:d.dx,y1:d.dy,x2:lx-side*3,y2:y},rayG);
+      const tx=el('text',{class:'tasklabel',x:lx,y:y+3,'text-anchor':side>0?'start':'end',fill:getVar('--ink')},rayG);
+      tx.textContent=trunc(d.task.title,22);
+      el('title',{},tx).textContent=d.task.title;
+    });
+
+    // tag label at the rim, horizontal
+    const[lx,ly]=polar(R_OUT+30,it.mid);
+    const lab=el('text',{class:'tag-label',x:lx,y:ly+4,'text-anchor':Math.abs(Math.cos(it.mid*Math.PI/180))<0.25?'middle':(Math.cos(it.mid*Math.PI/180)>=0?'start':'end'),
+      'font-size':13,fill:tagInk(it.hue,dark)},rayG);
     lab.textContent=`${it.tag.emoji} ${it.tag.label}`;
 
     rayG.addEventListener('click',()=>openTag(it));
@@ -359,9 +390,7 @@ function render(){
   applyDim();
 }
 
-function normRot(deg){return (deg>90&&deg<270)?deg+180:deg;}
 function trunc(s,n){return s.length>n?s.slice(0,Math.max(1,n-1))+'…':s;}
-
 function dimOthers(hoverIdx){
   const focus=hoverIdx!==null?hoverIdx:selectedIdx;
   document.querySelectorAll('.ray').forEach(r=>r.classList.toggle('dim',focus!==null&&+r.dataset.idx!==focus));

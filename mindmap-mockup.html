@@ -233,6 +233,7 @@ const DATA=[
 const SVGNS='http://www.w3.org/2000/svg';
 const CX=500,CY=500;
 const R_HUB=28, R_IN=40, R_OUT=380;
+const R_MIN=74;             // radius of the most-urgent (rank 1) dot — pulled ~2× closer to centre
 const GAP=12, PAD=1.4;      // degrees between sectors
 
 const sky=document.getElementById('sky');
@@ -248,9 +249,15 @@ function annularSector(r0,r1,a0,a1){
 }
 function arcPath(r,a0,a1){const[x0,y0]=polar(r,a0),[x1,y1]=polar(r,a1);const lg=(a1-a0)>180?1:0;return `M${x0},${y0} A${r},${r} 0 ${lg},1 ${x1},${y1}`;}
 
-// Logarithmic scale, adaptive to the busiest ray: SCALE_MAX tasks reach the rim.
-// Compresses high counts and packs the dots tighter toward the periphery.
-function fRad(rank){const r=Math.min(Math.max(rank,0),SCALE_MAX);return R_IN+(R_OUT-R_IN)*Math.log(1+r)/Math.log(1+SCALE_MAX);}
+// Logarithmic scale, adaptive to the busiest ray. Anchored so the most-urgent
+// rank sits at R_MIN (close to the centre) and SCALE_MAX tasks reach the rim;
+// still compresses high counts and packs dots tighter toward the periphery.
+function fRad(rank){
+  const r=Math.min(Math.max(rank,1),SCALE_MAX);
+  const den=Math.log(1+SCALE_MAX)-Math.log(2);
+  if(den<=0) return R_MIN;                       // busiest ray has ≤1 task
+  return R_MIN+(R_OUT-R_MIN)*(Math.log(1+r)-Math.log(2))/den;
+}
 
 function theme(){const e=document.documentElement.getAttribute('data-theme');return e||(matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light');}
 function getVar(v){return getComputedStyle(document.documentElement).getPropertyValue(v).trim();}

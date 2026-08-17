@@ -57,7 +57,7 @@
     .wedge{transition:opacity .2s ease;}
     .ray.dim .wedge,.ray.dim .cap,.ray.dim .count,.ray.dim .taskdot,.ray.dim .tag-label{opacity:.28;}
     .taskdot{cursor:pointer;transition:opacity .2s;}
-    .taskdot:hover{stroke:var(--ink);stroke-width:2.5;}
+    .taskdot:hover{stroke:var(--ink);}
     .count{font-family:var(--sans);font-weight:700;pointer-events:none;}
     .tag-label{font-family:var(--sans);font-weight:600;pointer-events:none;}
     /* per-task names: hidden until ray hover or the "show tasks" toggle */
@@ -77,7 +77,10 @@
       border:1px solid var(--line);border-radius:13px;padding:9px 16px;box-shadow:0 4px 18px var(--shadow);
       font-size:11.5px;color:var(--ink-soft);max-width:92%;}
     .legend .grp{display:flex;align-items:center;gap:7px;}
-    .legend .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+    .legend .dot{width:11px;height:11px;border-radius:50%;display:inline-block;}
+    .legend .dot.ring{background:transparent;border:1.7px solid var(--ink-soft);}
+    .legend .dot.ring.bold{border-width:3px;}
+    .legend .dot.done{background:#9aa1ab;}
     .legend .caps{width:24px;height:0;border-top:2.5px solid var(--cap);border-radius:2px;}
     .legend b{color:var(--ink);font-weight:600;}
 
@@ -134,10 +137,9 @@
       <div class="legend">
         <div class="grp"><b>Длина луча</b> = число задач (лог. шкала)</div>
         <div class="grp"><span class="caps"></span>граница нагрузки</div>
-        <div class="grp"><span class="dot" style="background:#e0857f"></span>Высокий</div>
-        <div class="grp"><span class="dot" style="background:#e0b45f"></span>Средний</div>
-        <div class="grp"><span class="dot" style="background:#8fa8c6"></span>Обычный</div>
-        <div class="grp"><span class="dot" style="background:#79b79b"></span>Готово</div>
+        <div class="grp"><span class="dot ring"></span>Задача</div>
+        <div class="grp"><span class="dot ring bold"></span>Высокий приоритет</div>
+        <div class="grp"><span class="dot done"></span>Выполнено</div>
         <div class="grp">срочные — ближе к центру · одинаковая срочность — рядом</div>
       </div>
     </div>
@@ -255,8 +257,15 @@ function tagInk(hue,dark){return dark?`hsl(${hue} 60% 82%)`:`hsl(${hue} 52% 34%)
 function tagSoft(hue,dark){return dark?`hsl(${hue} 34% 22%)`:`hsl(${hue} 60% 95%)`;}
 
 const PR_RANK={high:0,med:1,low:2,none:3};
-const PR_COLOR={high:'#e0857f',med:'#e0b45f',low:'#8fa8c6',none:'#8fa8c6'};
-function dotColor(t){return t.done?'#79b79b':(PR_COLOR[t.pr]||'#8fa8c6');}
+const DONE_GREY='#9aa1ab';
+// active task = transparent dot with a near-white ring (thicker for high priority);
+// done task = plain grey, regardless of priority
+function dotAttrs(t,dark){
+  if(t.done) return {fill:dark?'rgba(150,160,175,.5)':'rgba(150,158,170,.5)',stroke:dark?'rgba(150,160,175,.75)':'rgba(120,130,145,.6)',sw:1.3,r:5.2};
+  const ring=dark?'rgba(238,244,252,.92)':'rgba(255,255,255,.96)';
+  return {fill:'transparent',stroke:ring,sw:t.pr==='high'?3.2:1.7,r:t.pr==='high'?6.4:5.4};
+}
+function statusCol(t,hue,dark){return t.done?DONE_GREY:tagInk(hue,dark);}
 
 function visibleTasks(tag){return showDone?tag.tasks:tag.tasks.filter(t=>!t.done);}
 function urgKey(t){return t.due||'∞';}
@@ -339,8 +348,8 @@ function render(){
       b.items.forEach((task,bi)=>{
         const ang=it.mid+stepDeg*(bi-(m-1)/2);
         const[dx,dy]=polar(r,ang);
-        const dot=el('circle',{class:'taskdot',cx:dx,cy:dy,r:task.pr==='high'?6.5:5.2,
-          fill:dotColor(task),stroke:dark?'rgba(255,255,255,.2)':'rgba(255,255,255,.85)','stroke-width':1.5},rayG);
+        const da=dotAttrs(task,dark);
+        const dot=el('circle',{class:'taskdot',cx:dx,cy:dy,r:da.r,fill:da.fill,stroke:da.stroke,'stroke-width':da.sw},rayG);
         el('title',{},dot).textContent=`${task.title}${task.due?' · '+fmtDue(task.due):''}`;
         dot.addEventListener('click',e=>{e.stopPropagation();openTask(it,task);});
         dots.push({task,dx,dy});
@@ -425,24 +434,28 @@ function openTag(it){
   openPanel();
 }
 function rowHtml(t,n){
+  const rdot=t.done
+    ? `<span class="rdot" style="background:${DONE_GREY}"></span>`
+    : `<span class="rdot" style="background:transparent;border:${t.pr==='high'?'3px':'1.7px'} solid var(--ink-soft)"></span>`;
   return `<div class="row ${t.done?'done':''}">${n?`<span class="rnum">${n}</span>`:'<span class="rnum"></span>'}`+
-    `<span class="rdot" style="background:${dotColor(t)}"></span><span class="rt">${esc(t.title)}</span>`+
+    `${rdot}<span class="rt">${esc(t.title)}</span>`+
     `${t.due?`<span class="rdue">${fmtDue(t.due)}</span>`:''}</div>`;
 }
 function openTask(it,task){
   selectedIdx=it.i;applyDim();
   const dark=theme()==='dark';
-  document.getElementById('p-accent').style.background=dotColor(task);
+  const sc=statusCol(task,it.hue,dark);
+  document.getElementById('p-accent').style.background=sc;
   const kind=document.getElementById('p-kind'); kind.textContent='Задача'; kind.style.color=tagInk(it.hue,dark);
   document.getElementById('p-title').textContent=task.title;
   const prLabel={high:'Высокий приоритет',med:'Средний',low:'Обычный',none:'Без приоритета'}[task.pr];
   document.getElementById('p-chips').innerHTML=
-    `<span class="chip" style="background:${dotColor(task)}22;color:${dotColor(task)}">${task.done?'Готово':prLabel}</span>`+
+    `<span class="chip" style="background:${sc}22;color:${sc}">${task.done?'Готово':prLabel}</span>`+
     (task.due?`<span class="chip" style="background:var(--bg);color:var(--ink-soft)">📅 ${fmtDue(task.due)}</span>`:'')+
     `<span class="chip" style="background:${tagSoft(it.hue,dark)};color:${tagInk(it.hue,dark)}">${it.tag.emoji} ${it.tag.label}</span>`;
   document.getElementById('p-body').innerHTML=
     `<div class="note">Часть области <b>${it.tag.emoji} ${it.tag.label}</b>. В реальном приложении здесь подзадачи, заметки и статус.</div>`+
-    `<button class="open-btn" style="background:${dotColor(task)}">→ Открыть задачу</button>`+
+    `<button class="open-btn" style="background:${sc}">→ Открыть задачу</button>`+
     `<button class="add-btn">+ Добавить подзадачу</button>`;
   openPanel();
 }

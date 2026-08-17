@@ -45,6 +45,10 @@
     .toggle{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink-soft);cursor:pointer;
       user-select:none;padding:6px 10px;border-radius:9px;border:1px solid var(--line);background:var(--panel);}
     .toggle input{accent-color:#5a9e82;}
+    .sel{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--ink-soft);
+      padding:6px 10px;border-radius:9px;border:1px solid var(--line);background:var(--panel);white-space:nowrap;}
+    .sel select{font-family:var(--sans);font-size:12.5px;color:var(--ink);background:var(--panel);
+      border:none;outline:none;cursor:pointer;font-weight:600;}
     .icon-btn{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--panel);
       color:var(--ink);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;}
     .icon-btn:hover{border-color:var(--ink-soft);}
@@ -129,6 +133,15 @@
   <div class="top-bar">
     <div class="brand"><span class="mark">☀️</span><h1>Mind Map</h1><span class="sub">колесо баланса · макет</span></div>
     <div class="top-spacer"></div>
+    <label class="sel">Раздел
+      <select id="divider-sel">
+        <option value="halves">Половинки (тёпл./хол.)</option>
+        <option value="tone">Тёмная / светлая</option>
+        <option value="seam">Мягкий шов</option>
+        <option value="line">Полоса</option>
+        <option value="none">Без разделения</option>
+      </select>
+    </label>
     <label class="toggle"><input type="checkbox" id="show-tasks"> Показать задачи</label>
     <label class="toggle"><input type="checkbox" id="show-done"> Показать выполненные</label>
     <button class="icon-btn" id="legend-btn" title="Легенда">?</button>
@@ -239,6 +252,37 @@ const GAP=12, PAD=1.4;      // degrees between sectors
 const sky=document.getElementById('sky');
 let showDone=false, selectedIdx=null;
 let SCALE_MAX=8;            // adaptive: = task count of the busiest ray (set each render)
+let DIVIDER_STYLE='halves'; // how the personal|work halves are separated
+
+// Paint the two halves. phase 'back' = tinted half-discs behind the wedges;
+// phase 'front' = the centre line / soft seam on top of the wedges.
+function drawDivider(g,defs,dark,phase){
+  const S=DIVIDER_STYLE, Rbg=R_OUT+18;
+  const leftDisc =`M${CX},${CY-Rbg} A${Rbg},${Rbg} 0 0,0 ${CX},${CY+Rbg} Z`; // work (left)
+  const rightDisc=`M${CX},${CY-Rbg} A${Rbg},${Rbg} 0 0,1 ${CX},${CY+Rbg} Z`; // personal (right)
+  if(phase==='back'){
+    if(S==='halves'){
+      const L=dark?'rgba(120,150,190,.09)':'rgba(70,95,135,.06)';
+      const R=dark?'rgba(235,190,120,.09)':'rgba(214,158,86,.07)';
+      el('path',{d:leftDisc,fill:L},g); el('path',{d:rightDisc,fill:R},g);
+    } else if(S==='tone'){
+      const L=dark?'rgba(0,0,0,.22)':'rgba(40,45,60,.06)';
+      const R=dark?'rgba(255,255,255,.05)':'rgba(255,255,255,.11)';
+      el('path',{d:leftDisc,fill:L},g); el('path',{d:rightDisc,fill:R},g);
+    }
+  } else {
+    if(S==='line'){
+      el('line',{x1:CX,y1:CY-R_OUT,x2:CX,y2:CY+R_OUT,stroke:getVar('--cap'),'stroke-width':2.5,'stroke-linecap':'round'},g);
+    } else if(S==='seam'){
+      const lg=el('linearGradient',{id:'seam',gradientUnits:'userSpaceOnUse',x1:CX-46,y1:0,x2:CX+46,y2:0},defs);
+      const c=getVar('--cap');
+      el('stop',{offset:0,'stop-color':c,'stop-opacity':0},lg);
+      el('stop',{offset:.5,'stop-color':c,'stop-opacity':dark?.45:.32},lg);
+      el('stop',{offset:1,'stop-color':c,'stop-opacity':0},lg);
+      el('rect',{x:CX-46,y:CY-R_OUT,width:92,height:2*R_OUT,fill:'url(#seam)'},g);
+    }
+  }
+}
 
 function el(n,a,p){const e=document.createElementNS(SVGNS,n);for(const k in a)e.setAttribute(k,a[k]);if(p)p.appendChild(e);return e;}
 function polar(r,deg){const a=deg*Math.PI/180;return[CX+r*Math.cos(a),CY+r*Math.sin(a)];}
@@ -336,8 +380,9 @@ function render(){
   const items=layout();
   SCALE_MAX=Math.max(1,...items.map(it=>it.count)); // longest ray reaches the rim
 
-  // ── background layer: all wedges, then scale rings, then the divider ──
+  // ── background layer: half tints, wedges, scale rings, then the divider ──
   const bgG=el('g',{},sky);
+  drawDivider(bgG,defs,dark,'back');
   items.forEach(it=>{
     const stops=gradStops(it.hue,dark), gid='g'+it.i;
     const grad=el('radialGradient',{id:gid,gradientUnits:'userSpaceOnUse',cx:CX,cy:CY,r:R_OUT},defs);
@@ -348,7 +393,7 @@ function render(){
       'fill-opacity':it.count===0?.4:1,'data-idx':it.i},bgG);
   });
   for(let c=1;c<=SCALE_MAX;c++) el('circle',{cx:CX,cy:CY,r:fRad(c),fill:'none',stroke:getVar('--grid'),'stroke-width':1},bgG);
-  el('line',{x1:CX,y1:CY-R_OUT,x2:CX,y2:CY+R_OUT,stroke:getVar('--cap'),'stroke-width':2.5,'stroke-linecap':'round'},bgG);
+  drawDivider(bgG,defs,dark,'front');
 
   // ── foreground layer: dots, caps, labels — never covered by a neighbour wedge ──
   const frontG=el('g',{},sky);
@@ -481,6 +526,7 @@ function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace
 
 /* ── CONTROLS ── */
 document.getElementById('show-tasks').addEventListener('change',e=>document.body.classList.toggle('show-tasks',e.target.checked));
+document.getElementById('divider-sel').addEventListener('change',e=>{DIVIDER_STYLE=e.target.value;render();});
 document.getElementById('show-done').addEventListener('change',e=>{showDone=e.target.checked;render();if(selectedIdx!==null)closePanel();});
 document.getElementById('theme-btn').addEventListener('click',()=>{const c=theme();document.documentElement.setAttribute('data-theme',c==='dark'?'light':'dark');render();if(selectedIdx!==null)closePanel();});
 

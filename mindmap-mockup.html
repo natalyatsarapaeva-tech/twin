@@ -298,17 +298,20 @@ function bucketize(sorted){
 }
 function fmtDue(iso){if(!iso)return'';const[y,m,d]=iso.split('-');const mo=['янв','фев','мар','апр','мая','июн','июл','авг','сен','окт','ноя','дек'];return `${+d} ${mo[+m-1]}`;}
 
+function mkItem(tag,i,a0,a1){
+  const mid=(a0+a1)/2, per=a1-a0;
+  const tasks=sortByUrgency(visibleTasks(tag));
+  const hue=Math.round(((mid+90)%360+360)%360);
+  return {tag,i,a0,a1,mid,per,tasks,count:tasks.length,hue};
+}
+// Circle split exactly in half: RIGHT semicircle = personal, LEFT = work.
 function layout(){
-  const N=DATA.length, avail=360-2*GAP, per=avail/N;
-  const workCount=DATA.filter(d=>d.group==='work').length;
-  let a=-90+GAP/2;
-  return DATA.map((tag,i)=>{
-    if(i===workCount) a+=GAP;
-    const a0=a,a1=a+per,mid=(a0+a1)/2; a=a1;
-    const tasks=sortByUrgency(visibleTasks(tag));
-    const hue=Math.round(((mid+90)%360+360)%360);
-    return {tag,i,a0,a1,mid,per,tasks,count:tasks.length,hue};
-  });
+  const work=DATA.filter(d=>d.group==='work');
+  const personal=DATA.filter(d=>d.group==='personal');
+  const items=[]; let idx=0;
+  if(personal.length){const per=(180-GAP)/personal.length;let a=-90+GAP/2;personal.forEach(t=>{items.push(mkItem(t,idx++,a,a+per));a+=per;});}
+  if(work.length){const per=(180-GAP)/work.length;let a=90+GAP/2;work.forEach(t=>{items.push(mkItem(t,idx++,a,a+per));a+=per;});}
+  return items;
 }
 
 // spread horizontal labels vertically so they don't overlap (1-D declutter, centre-preserving)
@@ -333,23 +336,27 @@ function render(){
   const items=layout();
   SCALE_MAX=Math.max(1,...items.map(it=>it.count)); // longest ray reaches the rim
 
-  // faint scale rings — one per task step, up to the busiest ray
-  const gridG=el('g',{},sky);
-  for(let c=1;c<=SCALE_MAX;c++) el('circle',{cx:CX,cy:CY,r:fRad(c),fill:'none',stroke:getVar('--grid'),'stroke-width':1},gridG);
-
-  const raysG=el('g',{},sky);
+  // ── background layer: all wedges, then scale rings, then the divider ──
+  const bgG=el('g',{},sky);
   items.forEach(it=>{
     const stops=gradStops(it.hue,dark), gid='g'+it.i;
     const grad=el('radialGradient',{id:gid,gradientUnits:'userSpaceOnUse',cx:CX,cy:CY,r:R_OUT},defs);
     el('stop',{offset:(R_IN/R_OUT),'stop-color':stops[0]},grad);
     el('stop',{offset:1,'stop-color':stops[1]},grad);
+    const outerR = it.count===0 ? R_IN+16 : fRad(it.count);
+    el('path',{class:'wedge',d:annularSector(R_IN,outerR,it.a0+PAD,it.a1-PAD),fill:`url(#${gid})`,
+      'fill-opacity':it.count===0?.4:1,'data-idx':it.i},bgG);
+  });
+  for(let c=1;c<=SCALE_MAX;c++) el('circle',{cx:CX,cy:CY,r:fRad(c),fill:'none',stroke:getVar('--grid'),'stroke-width':1},bgG);
+  el('line',{x1:CX,y1:CY-R_OUT,x2:CX,y2:CY+R_OUT,stroke:getVar('--cap'),'stroke-width':2.5,'stroke-linecap':'round'},bgG);
 
-    const rayG=el('g',{class:'ray'},raysG); rayG.dataset.idx=it.i;
-    const outerR=fRad(it.count); // colour ends at the load boundary
+  // ── foreground layer: dots, caps, labels — never covered by a neighbour wedge ──
+  const frontG=el('g',{},sky);
+  items.forEach(it=>{
+    const rayG=el('g',{class:'ray'},frontG); rayG.dataset.idx=it.i;
+    el('path',{d:annularSector(R_IN,R_OUT,it.a0+PAD,it.a1-PAD),fill:'transparent'},rayG);
+    const outerR=fRad(it.count);
 
-    el('path',{class:'wedge',d:annularSector(R_IN,outerR,it.a0+PAD,it.a1-PAD),fill:`url(#${gid})`},rayG);
-
-    // place task dots: radius by urgency rank (log), equal-urgency tasks fan sideways
     const dots=[];
     bucketize(it.tasks).forEach(b=>{
       const meanRank=(b.p0+b.p1)/2+1;
@@ -367,7 +374,6 @@ function render(){
       });
     });
 
-    // grey contour cap at the tip → shows how long the ray is
     if(it.count>0){
       el('path',{class:'cap',d:arcPath(outerR,it.a0+PAD,it.a1-PAD),fill:'none',
         stroke:getVar('--cap'),'stroke-width':2.5,'stroke-linecap':'round'},rayG);
@@ -377,7 +383,7 @@ function render(){
       num.textContent=it.count;
     }
 
-    // horizontal task-name labels beside their dots (on the side the ray points), de-overlapped vertically
+    // horizontal task-name labels beside their dots, de-overlapped vertically
     const side=Math.cos(it.mid*Math.PI/180)>=0?1:-1; // +1 right, -1 left
     const baseYs=spreadY(dots.map(d=>d.dy),15);
     dots.forEach((d,k)=>{
@@ -416,6 +422,7 @@ function trunc(s,n){return s.length>n?s.slice(0,Math.max(1,n-1))+'…':s;}
 function dimOthers(hoverIdx){
   const focus=hoverIdx!==null?hoverIdx:selectedIdx;
   document.querySelectorAll('.ray').forEach(r=>r.classList.toggle('dim',focus!==null&&+r.dataset.idx!==focus));
+  document.querySelectorAll('.wedge').forEach(w=>{w.style.opacity=(focus!==null&&+w.getAttribute('data-idx')!==focus)?'0.28':'';});
 }
 function applyDim(){dimOthers(null);}
 

@@ -303,20 +303,32 @@ function computeGroups(){
     if(tagGroups[primary]) tagGroups[primary].push(t); else untagged.push(t);
   });
 }
+function mkItem(tag,i,a0,a1){
+  const mid=(a0+a1)/2, per=a1-a0;
+  const raw = tag.id==='__untagged' ? untagged : (tagGroups[tag.id]||[]);
+  const tasks=sortByUrgency(raw);
+  const hue=Math.round(((mid+90)%360+360)%360);
+  return {tag,i,a0,a1,mid,per,tasks,count:tasks.length,hue};
+}
+// Circle split exactly in half: RIGHT semicircle = personal, LEFT = work.
+// Each half is divided into that group's tags; GAP at top & bottom holds the divider.
 function layoutItems(){
-  const base=tagList();
-  const list = untagged.length ? [...base,{id:'__untagged',label:'Untagged',emoji:'📋',group:'personal'}] : base;
-  const N=Math.max(1,list.length), avail=360-2*GAP, per=avail/N;
-  const workCount=(TAGS_CONFIG.work||[]).length;
-  let a=-90+GAP/2;
-  return list.map((tag,i)=>{
-    if(i===workCount) a+=GAP;
-    const a0=a,a1=a+per,mid=(a0+a1)/2; a=a1;
-    const raw = tag.id==='__untagged' ? untagged : (tagGroups[tag.id]||[]);
-    const tasks=sortByUrgency(raw);
-    const hue=Math.round(((mid+90)%360+360)%360);
-    return {tag,i,a0,a1,mid,per,tasks,count:tasks.length,hue};
-  });
+  const tags=tagList();
+  const work=tags.filter(t=>t.group==='work');
+  let personal=tags.filter(t=>t.group==='personal');
+  if(untagged.length) personal=[...personal,{id:'__untagged',label:'Untagged',emoji:'📋',group:'personal'}];
+  const items=[]; let idx=0;
+  // RIGHT half (personal): top (-90) → right (0) → bottom (90), clockwise
+  if(personal.length){
+    const per=(180-GAP)/personal.length; let a=-90+GAP/2;
+    personal.forEach(tag=>{ items.push(mkItem(tag,idx++,a,a+per)); a+=per; });
+  }
+  // LEFT half (work): bottom (90) → left (180) → top (270), clockwise
+  if(work.length){
+    const per=(180-GAP)/work.length; let a=90+GAP/2;
+    work.forEach(tag=>{ items.push(mkItem(tag,idx++,a,a+per)); a+=per; });
+  }
+  return items;
 }
 
 function spreadY(ys,gap){
@@ -340,25 +352,30 @@ function render(){
   document.getElementById('stat').textContent=(showDone?allTasks.length:activeTotal)+(showDone?' tasks':' active');
 
   const defs=el('defs',{},sky);
-  const gridG=el('g',{},sky);
-  for(let c=1;c<=SCALE_MAX;c++) el('circle',{cx:CX,cy:CY,r:fRad(c),fill:'none',stroke:getVar('--grid'),'stroke-width':1},gridG);
-
-  const raysG=el('g',{},sky);
+  // ── background layer: all wedges first, then scale rings, then the divider ──
+  const bgG=el('g',{},sky);
   items.forEach(it=>{
     const stops=gradStops(it.hue,dark), gid='g'+it.i;
     const grad=el('radialGradient',{id:gid,gradientUnits:'userSpaceOnUse',cx:CX,cy:CY,r:R_OUT},defs);
     el('stop',{offset:(R_IN/R_OUT),'stop-color':stops[0]},grad);
     el('stop',{offset:1,'stop-color':stops[1]},grad);
+    const outerR = it.count===0 ? R_IN+16 : fRad(it.count);
+    el('path',{class:'wedge',d:annularSector(R_IN,outerR,it.a0+PAD,it.a1-PAD),fill:`url(#${gid})`,
+      'fill-opacity':it.count===0?.4:1,'data-tid':it.tag.id},bgG);
+  });
+  for(let c=1;c<=SCALE_MAX;c++) el('circle',{cx:CX,cy:CY,r:fRad(c),fill:'none',stroke:getVar('--grid'),'stroke-width':1},bgG);
+  // vertical divider (same grey as the ray-end caps) separating personal | work
+  el('line',{x1:CX,y1:CY-R_OUT,x2:CX,y2:CY+R_OUT,stroke:getVar('--cap'),'stroke-width':2.5,'stroke-linecap':'round'},bgG);
 
-    const rayG=el('g',{class:'ray'},raysG); rayG.dataset.tid=it.tag.id;
+  // ── foreground layer: dots, caps, counts, labels — never covered by a neighbour wedge ──
+  const frontG=el('g',{},sky);
+  items.forEach(it=>{
+    const rayG=el('g',{class:'ray'},frontG); rayG.dataset.tid=it.tag.id;
+    // transparent hit area spanning the whole sector (drives hover + click; sits above wedge)
+    el('path',{d:annularSector(R_IN,R_OUT,it.a0+PAD,it.a1-PAD),fill:'transparent'},rayG);
 
-    if(it.count===0){
-      // empty area — faint stub + muted label
-      el('path',{class:'wedge',d:annularSector(R_IN,R_IN+16,it.a0+PAD,it.a1-PAD),fill:`url(#${gid})`,'fill-opacity':.4},rayG);
-    } else {
-      const outerR=fRad(it.count);
-      el('path',{class:'wedge',d:annularSector(R_IN,outerR,it.a0+PAD,it.a1-PAD),fill:`url(#${gid})`},rayG);
-
+    if(it.count>0){
+      const outer=fRad(it.count);
       const dots=[];
       bucketize(it.tasks).forEach(b=>{
         const r=fRad((b.p0+b.p1)/2+1), m=b.items.length;
@@ -373,7 +390,6 @@ function render(){
         });
       });
 
-      const outer=fRad(it.count);
       el('path',{class:'cap',d:arcPath(outer,it.a0+PAD,it.a1-PAD),fill:'none',stroke:getVar('--cap'),'stroke-width':2.5,'stroke-linecap':'round'},rayG);
       const[nx,ny]=polar(outer+13,it.mid);
       el('text',{class:'count',x:nx,y:ny,'text-anchor':'middle','dominant-baseline':'middle','font-size':13,fill:getVar('--ink-soft')},rayG).textContent=it.count;
@@ -402,7 +418,7 @@ function render(){
     rayG.addEventListener('mouseleave',()=>dimOthers(null));
   });
 
-  // centre hub
+  // centre hub (on top of the divider)
   const g=el('radialGradient',{id:'sun',cx:'40%',cy:'36%',r:'72%'},defs);
   el('stop',{offset:'0%','stop-color':getVar('--sun1')},g);
   el('stop',{offset:'100%','stop-color':getVar('--sun2')},g);
@@ -418,6 +434,7 @@ function render(){
 function dimOthers(hoverId){
   const focus = hoverId!==null?hoverId:selectedTagId;
   document.querySelectorAll('.ray').forEach(r=>r.classList.toggle('dim',focus!==null&&r.dataset.tid!==focus));
+  document.querySelectorAll('.wedge').forEach(w=>{w.style.opacity=(focus!==null&&w.getAttribute('data-tid')!==focus)?'0.28':'';});
 }
 function applyDim(){dimOthers(null);}
 

@@ -1376,21 +1376,11 @@ async function classifyAndGetContext(userMessage) {
     `[${t.id}] ${t.title} | tags:${(t.tags||[]).join(',')}`
   ).join('\n');
 
-  const prompt = `Task list:
-${quickList}
-
-User message: "${userMessage}"
-
-Return ONLY JSON:
-{
-  "topic": "brief topic in English or null",
-  "relevantTags": ["tag1","tag2"],
-  "relevantTaskIds": ["id1","id2"],
-  "isGeneral": true/false
-}
-
-Tags: ${[...WORK_TAGS,...PERSONAL_TAGS].join(',')}
-isGeneral=true if the question is intentionally broad (e.g. "what should I do today?")`;
+  const prompt = fillPrompt('classifier', {
+    TASK_LIST: quickList,
+    USER_MESSAGE: userMessage,
+    TAGS: [...WORK_TAGS, ...PERSONAL_TAGS].join(','),
+  });
 
   try {
     const data = await gpt({model:'gpt-4o',max_tokens:250,temperature:0,

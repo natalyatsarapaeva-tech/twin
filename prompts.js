@@ -68,6 +68,24 @@ export const PROMPT_META = {
       TITLE: 'the task title',
     },
   },
+  classifier: {
+    label: 'Main assistant · classifier (silent step 1)',
+    where: 'index.html — runs before every chat reply to pick topic/tags/tasks',
+    tokens: {
+      TASK_LIST: 'compact list of all tasks (id · title · tags)',
+      USER_MESSAGE: "the user's chat message",
+      TAGS: 'comma-separated list of the user\'s tag ids',
+    },
+  },
+  bulkImport: {
+    label: 'Bulk import (add-task page)',
+    where: 'add-task.html — "Parse and add" free-text importer',
+    tokens: {
+      WORK_TAGS: 'comma-separated Work tag ids',
+      PERSONAL_TAGS: 'comma-separated Personal tag ids',
+      TODAY: "today's date (YYYY-MM-DD)",
+    },
+  },
 };
 
 // ── Default templates ────────────────────────────────────────────────────────
@@ -156,6 +174,38 @@ Be substantive and specific — keep the real data; do not cap it artificially s
 Don't duplicate existing subtasks. Consider related tasks context.
 Return ONLY a JSON array, no markdown:
 [{"title":"...","note":"brief note","dueDate":"YYYY-MM-DD or null","status":"new","assigned":""}]`,
+
+  classifier: `Task list:
+{{TASK_LIST}}
+
+User message: "{{USER_MESSAGE}}"
+
+Return ONLY JSON:
+{
+  "topic": "brief topic in English or null",
+  "relevantTags": ["tag1","tag2"],
+  "relevantTaskIds": ["id1","id2"],
+  "isGeneral": true/false
+}
+
+Tags: {{TAGS}}
+isGeneral=true if the question is intentionally broad (e.g. "what should I do today?")`,
+
+  bulkImport: `You are a task management assistant. Parse the task list and return ONLY a valid JSON array, no explanations or markdown.
+
+For each task:
+{
+  "title": "task title in the SAME language as the input",
+  "tags": ["tag1", "tag2"],
+  "deadline": "YYYY-MM-DD or null",
+  "nextAction": "YYYY-MM-DD or null",
+  "priority": "high|med|low|none",
+  "status": "new"
+}
+
+Available tags — Work: {{WORK_TAGS}} | Personal: {{PERSONAL_TAGS}}
+
+Auto-detect tags from context. Keep task titles in the same language the user wrote them; do NOT translate. Today: {{TODAY}}.`,
 };
 
 // ── Runtime state ────────────────────────────────────────────────────────────

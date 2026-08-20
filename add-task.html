@@ -221,6 +221,7 @@
 
 <script type="module">
 import { db, doc, getDoc, setDoc, collection, getDocs, requireAuth, migrateIfOwner } from "./store.js";
+import { loadPrompts, fillPrompt } from "./prompts.js";
 
 // ── TAGS ──
 // A new account starts with NO tags — the onboarding assistant creates a set
@@ -277,6 +278,7 @@ function renderTagGrid() {
 }
 async function init() {
   await loadTags();
+  await loadPrompts();
   renderTagGrid();
   const preset = localStorage.getItem('newTaskPresetTag');
   if (preset) {
@@ -390,21 +392,11 @@ window.analyzeBatch = async function() {
   const btn = document.getElementById('batch-btn');
   btn.disabled = true; btn.textContent = '⏳ Analyzing…';
 
-  const systemPrompt = `You are a task management assistant. Parse the task list and return ONLY a valid JSON array, no explanations or markdown.
-
-For each task:
-{
-  "title": "task title in the SAME language as the input",
-  "tags": ["tag1", "tag2"],
-  "deadline": "YYYY-MM-DD or null",
-  "nextAction": "YYYY-MM-DD or null",
-  "priority": "high|med|low|none",
-  "status": "new"
-}
-
-Available tags — Work: ${WORK_TAGS.join(', ')} | Personal: ${PERSONAL_TAGS.join(', ')}
-
-Auto-detect tags from context. Keep task titles in the same language the user wrote them; do NOT translate. Today: ${new Date().toISOString().split('T')[0]}.`;
+  const systemPrompt = fillPrompt('bulkImport', {
+    WORK_TAGS: WORK_TAGS.join(', '),
+    PERSONAL_TAGS: PERSONAL_TAGS.join(', '),
+    TODAY: new Date().toISOString().split('T')[0],
+  });
 
   try {
     const data = await gpt({model:'gpt-4o',max_tokens:2000,messages:[

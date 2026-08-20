@@ -1388,6 +1388,9 @@ Return JSON blocks at the end of your response when taking action.
 7. ADD TO CONTEXT / MEMORY (only AFTER the user approves):
 {"action":"update_context","target":"user OR a tag id","text":"the durable fact to remember"}
 
+8. DELETE TAG (only AFTER the user approves):
+{"action":"delete_tag","tagId":"tag-id-from-supported-tags","confirm":true}
+
 Supported tags: ${[...WORK_TAGS,...PERSONAL_TAGS].join(', ')}
 
 RULES:
@@ -1396,7 +1399,7 @@ RULES:
 - Write a short text reply FIRST, then put the JSON action block(s) on their own line(s) at the very END of your message.
 - Never claim a task/tag/context was created or saved. The app shows a ✅ chip only when the action actually runs. In prose describe intent, not completion.
 - Tasks & subtasks: act in the SAME reply — don't ask first.
-- Deletes, NEW TAGS, and CONTEXT notes: PROPOSE in prose and ask; output their JSON action ONLY after the user explicitly agrees (in a later message). Never create a tag or write context silently.
+- Task deletes, TAG deletes, NEW TAGS, and CONTEXT notes: PROPOSE in prose and ask; output their JSON action ONLY after the user explicitly agrees (in a later message). Never create a tag, delete a tag, or write context silently. Deleting a tag also removes it from every task that carries it — say so when proposing.
 - Tag suggestions: if a task fits no existing tag, offer to create one (name + group) and ask before creating.
 - Context radar: when the user reveals a durable fact or recurring need (e.g. asking to schedule a blood-sugar test → periodic blood-sugar monitoring; an ongoing preference, a chronic condition, a standing constraint), ASK whether to save it to their context, phrased as a question. Save (update_context) only after they agree; append, never overwrite.
 - Use real task IDs exactly as given in the context above.`;
@@ -1661,6 +1664,30 @@ async function executeAction(action) {
       await setDoc(doc(db,'meta','tags'), TAGS_CONFIG);
       buildTagMeta(); buildFilterTabs();
       return {ok:true, msg:`✅ Tag created: ${emoji} ${label} (${group})`};
+    }
+    case 'delete_tag': {
+      if (!action.confirm) return {ok:false, msg:'⚠️ Tag deletion not confirmed'};
+      const tid = (action.tagId || action.id || '').toString();
+      const group = TAGS_CONFIG.work.some(t=>t.id===tid) ? 'work'
+                  : TAGS_CONFIG.personal.some(t=>t.id===tid) ? 'personal' : null;
+      if (!group) return {ok:false, msg:`❌ Tag "${tid}" not found`};
+      const removed = TAGS_CONFIG[group].find(t=>t.id===tid);
+      TAGS_CONFIG[group] = TAGS_CONFIG[group].filter(t=>t.id!==tid);
+      await setDoc(doc(db,'meta','tags'), TAGS_CONFIG);
+      // Strip the tag from any tasks carrying it (tags array + primaryTag)
+      let touched = 0;
+      for (const t of allTasks) {
+        if (!((t.tags||[]).includes(tid) || t.primaryTag === tid)) continue;
+        t.tags = (t.tags||[]).filter(x=>x!==tid);
+        if (t.primaryTag === tid) t.primaryTag = t.tags[0] || null;
+        await setDoc(doc(db,'tasks',t.id), t);
+        touched++;
+      }
+      if (currentTag === tid) currentTag = null;
+      buildTagMeta(); buildFilterTabs();
+      renderCards(); updateHeaderStats();
+      const lbl = removed ? `${removed.emoji} ${removed.label}` : tid;
+      return {ok:true, msg:`🗑 Tag deleted: ${lbl}${touched?` · untagged ${touched} task${touched===1?'':'s'}`:''}`};
     }
     case 'update_context': {
       const target = (action.target || 'user').toString().trim();

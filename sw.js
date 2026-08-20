@@ -3,7 +3,7 @@
  * - Web Push notifications (push + notificationclick handlers)
  * Bump CACHE when shipping changes so old caches are dropped on activate.
  */
-const CACHE = 'twin-v5';
+const CACHE = 'twin-v6';
 const ASSETS = [
   './',
   './index.html',
@@ -11,8 +11,10 @@ const ASSETS = [
   './add-task.html',
   './mindmap.html',
   './context.html',
+  './admin.html',
   './voice.js',
   './pwa.js',
+  './prompts.js',
   './manifest.json',
   './icons/icon-192.png',
   './icons/icon-512.png'

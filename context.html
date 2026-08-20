@@ -98,6 +98,7 @@
     <a class="back-link" href="index.html">← Back</a>
     <h1>🧠 Wide Context</h1>
     <p>This information is sent to AI with every request — the richer it is, the smarter the responses.</p>
+    <a id="admin-link" class="back-link" href="admin.html" style="display:none;margin-top:10px;margin-bottom:0;">⚙️ System prompts (admin)</a>
   </div>
 
   <div class="body">
@@ -210,7 +211,14 @@ async function init() {
   await load();
   renderTagEditor();
 }
-requireAuth().then(migrateIfOwner).then(init).catch(e => console.error('init failed', e));
+requireAuth().then(user => {
+  // Owner-only: reveal the admin (system prompts) link.
+  if (user && user.email === 'natalya.tsarapaeva@gmail.com') {
+    const a = document.getElementById('admin-link');
+    if (a) a.style.display = 'inline-flex';
+  }
+  return user;
+}).then(migrateIfOwner).then(init).catch(e => console.error('init failed', e));
 
 // ── RENDER TAG LIST ──
 function renderTagList() {

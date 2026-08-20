@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Twin — Admin · System Prompts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Spectral:wght@500;600&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f0f4f8; --surface:#ffffff; --surface2:#e8eef5; --border:#dce5ef;
+      --lavender:#8b9fd4; --lav-pale:#dde3f5; --slate:#3d5a7a; --slate-dark:#2e4a6a;
+      --text:#1e2d3d; --text-soft:#6b83a0; --white:#ffffff;
+      --green:#5a9e78; --red:#c05a5a; --amber:#c08a3a;
+      --shadow:rgba(61,90,122,.12);
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding-bottom:60px;}
+    .header{background:linear-gradient(135deg,var(--slate) 0%,var(--slate-dark) 100%);padding:44px 24px 22px;position:relative;overflow:hidden;}
+    .header::before{content:'';position:absolute;top:-60px;right:-60px;width:180px;height:180px;border-radius:50%;background:var(--lavender);opacity:.15;}
+    .header h1{font-family:'Spectral',serif;font-size:25px;color:var(--white);position:relative;}
+    .header p{font-size:13px;color:#c8dcf0;margin-top:6px;max-width:640px;line-height:1.5;position:relative;}
+    .back{display:inline-block;color:#c8dcf0;font-size:13px;text-decoration:none;margin-bottom:12px;position:relative;}
+    .back:hover{color:#fff;}
+    .wrap{max-width:820px;margin:0 auto;padding:18px 16px 0;}
+    .note{background:var(--lav-pale);border-radius:12px;padding:12px 14px;font-size:12.5px;color:var(--slate);line-height:1.55;margin-bottom:16px;}
+    .card{background:var(--white);border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:0 2px 10px var(--shadow);}
+    .card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:4px;}
+    .card-title{font-family:'Spectral',serif;font-size:18px;color:var(--slate-dark);}
+    .card-where{font-size:11px;color:var(--text-soft);margin-top:2px;}
+    .badge{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;padding:4px 9px;border-radius:20px;white-space:nowrap;}
+    .badge.default{background:var(--surface2);color:var(--text-soft);}
+    .badge.custom{background:#e3f0e9;color:var(--green);}
+    .tokens{margin:12px 0 8px;display:flex;flex-wrap:wrap;gap:6px;}
+    .tok{font-size:11px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:4px 8px;color:var(--slate);}
+    .tok code{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:700;color:var(--slate-dark);}
+    .tok span{color:var(--text-soft);}
+    textarea{width:100%;padding:12px 14px;border-radius:11px;border:2px solid var(--border);background:var(--surface2);
+      font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;color:var(--text);outline:none;resize:vertical;
+      min-height:150px;line-height:1.55;white-space:pre;overflow-wrap:normal;overflow-x:auto;}
+    textarea:focus{border-color:var(--lavender);background:var(--white);}
+    .actions{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap;}
+    button{font-family:'DM Sans',sans-serif;font-weight:600;font-size:13px;cursor:pointer;border:none;border-radius:10px;padding:9px 16px;transition:all .15s;}
+    .btn-save{background:var(--slate);color:#fff;}
+    .btn-save:hover{background:var(--slate-dark);}
+    .btn-reset{background:var(--white);border:2px solid var(--border);color:var(--text-soft);}
+    .btn-reset:hover:not(:disabled){border-color:var(--red);color:var(--red);}
+    .btn-reset:disabled{opacity:.4;cursor:default;}
+    .state{font-size:12px;margin-left:4px;min-height:16px;}
+    .state.ok{color:var(--green);}
+    .state.dirty{color:var(--amber);}
+    .denied{max-width:520px;margin:80px auto;text-align:center;padding:0 24px;}
+    .denied .em{font-size:52px;}
+    .denied h2{font-family:'Spectral',serif;font-size:24px;color:var(--slate-dark);margin:14px 0 8px;}
+    .denied p{font-size:14px;color:var(--text-soft);line-height:1.6;}
+    #app{display:none;}
+  </style>
+</head>
+<body>
+  <div id="denied" class="denied" style="display:none">
+    <div class="em">🔒</div>
+    <h2>Admin only</h2>
+    <p id="denied-msg">This page is restricted to the app owner.</p>
+    <p style="margin-top:14px"><a class="back" href="./index.html" style="color:var(--lavender)">← Back to Twin</a></p>
+  </div>
+
+  <div id="app">
+    <div class="header">
+      <a class="back" href="./index.html">← Back to Twin</a>
+      <h1>System prompts</h1>
+      <p>The exact instructions each AI assistant runs on. Edit and Save to override; Reset restores the built-in default. The app injects live data where you see the <code>{{TOKENS}}</code> — keep the tokens you want that data to appear.</p>
+    </div>
+    <div class="wrap">
+      <div class="note">
+        ⚠️ These are the real prompts sent to GPT. Changes are stored in <b>your</b> account (per-user) and take effect on the next assistant run — reload the page/app after saving. Deleting a token means that data stops being inserted. If something breaks, hit <b>Reset to default</b>.
+      </div>
+      <div id="cards"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { requireAuth } from "./store.js";
+    import { DEFAULT_PROMPTS, PROMPT_META, loadPrompts, getPrompt, isOverridden, savePrompt, resetPrompt } from "./prompts.js";
+
+    const OWNER_EMAIL = 'natalya.tsarapaeva@gmail.com';
+
+    // Render order = the three assistants the owner asked for.
+    const ORDER = ['mainChat', 'taskSystem', 'draftPlan', 'draftResearch', 'draftCompile', 'subtasks'];
+
+    function esc(s){ return String(s).replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+
+    function renderCard(key){
+      const meta = PROMPT_META[key] || {label:key, where:'', tokens:{}};
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.id = 'card-' + key;
+
+      const tokenRows = Object.entries(meta.tokens||{})
+        .map(([t,desc]) => `<span class="tok"><code>{{${t}}}</code> <span>${esc(desc)}</span></span>`).join('');
+
+      card.innerHTML = `
+        <div class="card-top">
+          <div>
+            <div class="card-title">${esc(meta.label)}</div>
+            <div class="card-where">${esc(meta.where||'')}</div>
+          </div>
+          <span class="badge ${isOverridden(key)?'custom':'default'}" id="badge-${key}">${isOverridden(key)?'Custom':'Default'}</span>
+        </div>
+        <div class="tokens">${tokenRows}</div>
+        <textarea id="ta-${key}" spellcheck="false"></textarea>
+        <div class="actions">
+          <button class="btn-save" id="save-${key}">💾 Save override</button>
+          <button class="btn-reset" id="reset-${key}" ${isOverridden(key)?'':'disabled'}>↺ Reset to default</button>
+          <span class="state" id="state-${key}"></span>
+        </div>`;
+      document.getElementById('cards').appendChild(card);
+
+      const ta = card.querySelector('#ta-'+key);
+      ta.value = getPrompt(key);
+      const state = card.querySelector('#state-'+key);
+      const badge = card.querySelector('#badge-'+key);
+      const resetBtn = card.querySelector('#reset-'+key);
+
+      ta.addEventListener('input', () => {
+        const changed = ta.value !== getPrompt(key);
+        state.textContent = changed ? '● unsaved changes' : '';
+        state.className = 'state ' + (changed ? 'dirty' : '');
+      });
+
+      card.querySelector('#save-'+key).addEventListener('click', async () => {
+        try {
+          const val = ta.value;
+          // Empty/whitespace clears the override (falls back to default).
+          await savePrompt(key, val);
+          const overridden = isOverridden(key);
+          badge.textContent = overridden ? 'Custom' : 'Default';
+          badge.className = 'badge ' + (overridden ? 'custom' : 'default');
+          resetBtn.disabled = !overridden;
+          if (!overridden) ta.value = getPrompt(key); // was cleared → show default
+          state.textContent = '✓ saved'; state.className = 'state ok';
+          setTimeout(()=>{ state.textContent=''; }, 2500);
+        } catch(e){
+          state.textContent = '✕ ' + e.message; state.className = 'state';
+          state.style.color = 'var(--red)';
+        }
+      });
+
+      resetBtn.addEventListener('click', async () => {
+        if (!confirm('Reset this prompt to the built-in default? Your custom version will be discarded.')) return;
+        try {
+          await resetPrompt(key);
+          ta.value = getPrompt(key);
+          badge.textContent = 'Default'; badge.className = 'badge default';
+          resetBtn.disabled = true;
+          state.textContent = '✓ reset to default'; state.className = 'state ok';
+          setTimeout(()=>{ state.textContent=''; }, 2500);
+        } catch(e){
+          state.textContent = '✕ ' + e.message; state.className = 'state';
+        }
+      });
+    }
+
+    requireAuth().then(async (user) => {
+      if (!user || user.email !== OWNER_EMAIL) {
+        document.getElementById('denied').style.display = 'block';
+        const m = document.getElementById('denied-msg');
+        if (m && user) m.textContent = `Signed in as ${user.email}, which is not the owner account. This page is restricted to the app owner.`;
+        return;
+      }
+      await loadPrompts();
+      document.getElementById('app').style.display = 'block';
+      for (const key of ORDER) if (DEFAULT_PROMPTS[key]) renderCard(key);
+    }).catch(e => {
+      document.getElementById('denied').style.display = 'block';
+      document.getElementById('denied-msg').textContent = 'Could not verify access: ' + e.message;
+    });
+  </script>
+</body>
+</html>

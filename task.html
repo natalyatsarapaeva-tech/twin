@@ -408,6 +408,7 @@
 
 <script type="module">
 import { db, doc, getDoc, updateDoc, deleteDoc, setDoc, getDocs, collection, requireAuth, migrateIfOwner } from "./store.js";
+import { loadPrompts, fillPrompt } from "./prompts.js";
 
 // ── TAG TAXONOMY ──
 // ── TAGS ──
@@ -462,7 +463,7 @@ async function load() {
   const tlw = document.getElementById('task-lang-wrap');
   if (tlw) createLangToggle(tlw);
 }
-async function init() { await loadTags(); load(); }
+async function init() { await loadTags(); await loadPrompts(); load(); }
 requireAuth().then(migrateIfOwner).then(init).catch(e => {
   document.getElementById('loading').innerHTML = `<div style="color:#c8dcf0;padding:24px;text-align:center">Error: ${e.message}</div>`;
 });
@@ -1011,12 +1012,11 @@ ${task.subtasks.map((s,i) =>
     ? `\n=== RELATED TASKS (same tags) ===\n` + siblingTasks.map(t => buildTaskDump(t)).join('\n')
     : '';
 
-  return `You are an AI task management assistant. Today: ${today}. Respond in the SAME language the user writes in, and create all content (task titles, subtasks, notes) in that same language.
-
-${mainDump}${siblingDump}
-
-You help with the CURRENT TASK but know context of related tasks.
-Be specific, use real data from context.`;
+  return fillPrompt('taskSystem', {
+    TODAY: today,
+    MAIN_DUMP: mainDump,
+    SIBLING_DUMP: siblingDump,
+  });
 }
 
 // ── ЧЕРНОВИК РЕШЕНИЯ ──
@@ -1057,12 +1057,7 @@ window.aiDraft = async function() {
     // STEP 1 — plan the desk-research agenda (task-specific questions, not generic advice)
     stepActive('rs1');
     const planRaw = await callGPT(sysPrompt,
-      `Plan the desk research needed to actually MOVE FORWARD the task "${task.title}".
-Act like a research analyst who will do the legwork FOR the user — NOT a coach explaining how they should approach it.
-List the concrete areas of this task that can be advanced by desk research right now: things you can investigate and answer from knowledge — market categories, option landscapes, price / rate / yield ranges, locations, providers, comparisons, regulations, and so on.
-Return ONLY a JSON array of 2–5 items. Each item: {"area":"short label","question":"the specific research question to answer"}.
-Make every question specific to THIS task, using its own details. Example — for "buy investment property in Bali":
-[{"area":"Property categories","question":"What categories of investment/commercial property exist in Bali and how do they differ for a foreign investor?"},{"area":"Expected yield","question":"What is the average expected rental / ROI yield range for Bali investment property, by category?"},{"area":"Prime areas","question":"Which Bali districts are most attractive for investment, and why?"}]${steerLine}`
+      fillPrompt('draftPlan', {TITLE: task.title, STEER: steerLine})
     );
     let plan = [];
     try {
@@ -1084,12 +1079,7 @@ Make every question specific to THIS task, using its own details. Example — fo
     const research = {};
     for (const item of plan) {
       research[item.area] = await callGPT(sysPrompt,
-        `Do the desk research and ANSWER this question for the task "${task.title}". Don't explain how one could research it — actually deliver the findings.
-
-QUESTION: ${item.question}
-
-Give concrete, specific findings: real categories / options, names, number / price / rate / yield ranges, locations, pros & cons, comparisons — whatever the question calls for. Use 4–8 bullet points.
-Where a figure is an estimate from general knowledge (you have no live web access here), append "(approx — verify)". Write in the same language as the task title / notes.${steerLine}`
+        fillPrompt('draftResearch', {TITLE: task.title, QUESTION: item.question, STEER: steerLine})
       );
     }
     stepDone('rs2');
@@ -1100,19 +1090,7 @@ Where a figure is an estimate from general knowledge (you have no live web acces
       .map(item => `### ${item.area}\nQ: ${item.question}\n${research[item.area]||''}`).join('\n\n');
 
     const draft = await callGPT(sysPrompt,
-      `Compile a research brief for the task "${task.title}" from the findings below.
-This is the analyst's COMPLETED desk research being handed to the user — PRESERVE the concrete data (categories, numbers, ranges, names, locations, comparisons). Do NOT water it down into generic "here's how to approach it" advice.
-
-FINDINGS:
-${researchBlock}
-
-Structure:
-**Summary** — 2–3 sentences on what the research actually found.
-Then one **section per research area**, each keeping its concrete findings (numbers, options, comparisons intact).
-**Recommendation** — the specific, researched direction these findings point to.
-**Still to verify** — the few facts that need live / real-world confirmation.
-
-Be substantive and specific — keep the real data; do not cap it artificially short. Write in the same language as the task title / notes.${steerLine}`
+      fillPrompt('draftCompile', {TITLE: task.title, FINDINGS: researchBlock, STEER: steerLine})
     );
     stepDone('rs3');
 
@@ -1151,10 +1129,7 @@ window.aiSuggestSubtasks = async function() {
     showAiResult('⏳ Thinking…');
     const res = await callGPT(
       buildSystemPromptTask(siblings),
-      `Suggest 4-6 new subtasks for task "${task.title}".
-Don't duplicate existing subtasks. Consider related tasks context.
-Return ONLY a JSON array, no markdown:
-[{"title":"...","note":"brief note","dueDate":"YYYY-MM-DD or null","status":"new","assigned":""}]`
+      fillPrompt('subtasks', {TITLE: task.title})
     );
     const clean = res.replace(/^```json\s*/m,'').replace(/^```\s*/m,'').replace(/\s*```$/m,'').trim();
     try {

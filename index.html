@@ -463,6 +463,7 @@
 
 <script type="module">
 import { db, collection, getDocs, doc, getDoc, setDoc, deleteDoc, requireAuth, migrateIfOwner } from "./store.js";
+import { loadPrompts, fillPrompt } from "./prompts.js";
 
 // ── STATE ──
 let allTasks = [];
@@ -558,6 +559,7 @@ async function loadTasks() {
 }
 async function init() {
   await loadTags();
+  await loadPrompts();
   buildFilterTabs();
   loadTasks();
   loadWideContext();
@@ -1359,50 +1361,13 @@ ${subs||'    none'}`;
     .join('\n');
   const sectionD = bgTasks ? `\n═══ [D] OTHER HIGH PRIORITY TASKS ═══\n${bgTasks}` : '';
 
-  return `You are a personal AI task management assistant. Today: ${today}.
-Respond in the SAME language the user writes in, and create all content (task titles, subtasks, notes, tag labels, context) in that same language. Tag ids must still be a short latin-lowercase slug even when the label is in another language.
-${topic ? `Current topic: ${topic}` : ''}
-${sectionA}${sectionB}${sectionC}${sectionD}
-
-═══ AVAILABLE ACTIONS ═══
-Return JSON blocks at the end of your response when taking action.
-
-1. CREATE TASK:
-{"action":"create_task","task":{"title":"...","description":"...","tags":["tag"],"deadline":"YYYY-MM-DD or null","nextAction":"YYYY-MM-DD or null","priority":"high|med|low|none","status":"new","subtasks":[]}}
-
-2. UPDATE TASK (changed fields only):
-{"action":"update_task","taskId":"ID_from_context","fields":{"title":"...","deadline":"...","nextAction":"...","priority":"...","status":"...","notes":"..."}}
-
-3. DELETE TASK:
-{"action":"delete_task","taskId":"ID_from_context","confirm":true}
-
-4. ADD SUBTASK:
-{"action":"add_subtask","taskId":"ID_from_context","subtask":{"title":"...","note":"...","dueDate":"YYYY-MM-DD or null","status":"new","assigned":""}}
-
-5. UPDATE SUBTASK:
-{"action":"update_subtask","taskId":"ID_from_context","subtaskIndex":0,"fields":{"title":"...","status":"...","dueDate":"...","note":"...","assigned":"..."}}
-
-6. CREATE TAG (only AFTER the user approves):
-{"action":"create_tag","tag":{"id":"lowercase-id","label":"Label","emoji":"🩸","group":"work|personal"}}
-
-7. ADD TO CONTEXT / MEMORY (only AFTER the user approves):
-{"action":"update_context","target":"user OR a tag id","text":"the durable fact to remember"}
-
-8. DELETE TAG (only AFTER the user approves):
-{"action":"delete_tag","tagId":"tag-id-from-supported-tags","confirm":true}
-
-Supported tags: ${[...WORK_TAGS,...PERSONAL_TAGS].join(', ')}
-
-RULES:
-- To create/update/delete a task or subtask you MUST output the JSON action block. Words alone save NOTHING.
-- Output each action as a COMPACT, SINGLE-LINE JSON object. No code fences (no \`\`\`), no line breaks or indentation inside the JSON.
-- Write a short text reply FIRST, then put the JSON action block(s) on their own line(s) at the very END of your message.
-- Never claim a task/tag/context was created or saved. The app shows a ✅ chip only when the action actually runs. In prose describe intent, not completion.
-- Tasks & subtasks: act in the SAME reply — don't ask first.
-- Task deletes, TAG deletes, NEW TAGS, and CONTEXT notes: PROPOSE in prose and ask; output their JSON action ONLY after the user explicitly agrees (in a later message). Never create a tag, delete a tag, or write context silently. Deleting a tag also removes it from every task that carries it — say so when proposing.
-- Tag suggestions: if a task fits no existing tag, offer to create one (name + group) and ask before creating.
-- Context radar: when the user reveals a durable fact or recurring need (e.g. asking to schedule a blood-sugar test → periodic blood-sugar monitoring; an ongoing preference, a chronic condition, a standing constraint), ASK whether to save it to their context, phrased as a question. Save (update_context) only after they agree; append, never overwrite.
-- Use real task IDs exactly as given in the context above.`;
+  const contextBlock = `${sectionA}${sectionB}${sectionC}${sectionD}`;
+  return fillPrompt('mainChat', {
+    TODAY: today,
+    TOPIC_LINE: topic ? `Current topic: ${topic}` : '',
+    CONTEXT: contextBlock,
+    TAGS: [...WORK_TAGS, ...PERSONAL_TAGS].join(', '),
+  });
 }
 
 // ── CLASSIFIER (silent) ──

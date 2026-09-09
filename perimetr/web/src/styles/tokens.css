@@ -1,0 +1,123 @@
+/* Дизайн-система «Периметра».
+ *
+ * Палитра: пыльная роза (акцент, действие, совпадение) и синевато-серый
+ * (структура, текст, всё служебное). Белого — около половины площади: карточки
+ * и поля ввода белые, фон страницы почти белый, цвет появляется только там, где
+ * он что-то ЗНАЧИТ. Приём унаследован от семейства Twin: компонент не знает
+ * цвета, он знает роль цвета, поэтому тема — это подмена значений переменных.
+ */
+
+:root {
+  /* ── Пыльная роза ─────────────────────────────────────────────────────── */
+  --rose-50:  #FBF5F5;
+  --rose-100: #F4E7E7;
+  --rose-200: #E8CFD0;
+  --rose-300: #D6ADAF;
+  --rose-400: #C28E92;
+  --rose-500: #A97176;   /* основной акцент */
+  --rose-600: #8C575C;
+  --rose-700: #6B4145;
+
+  /* ── Синевато-серый ───────────────────────────────────────────────────── */
+  --slate-50:  #F5F7F9;
+  --slate-100: #E8EDF1;
+  --slate-200: #D4DDE4;
+  --slate-300: #B0BFCB;
+  --slate-400: #8598A8;
+  --slate-500: #647A8B;
+  --slate-600: #4D616F;
+  --slate-700: #3A4A56;
+  --slate-800: #27333C;
+  --slate-900: #182127;
+
+  /* ── Роли ─────────────────────────────────────────────────────────────── */
+  --bg:          #FCFBFB;   /* фон страницы — почти белый */
+  --surface:     #FFFFFF;   /* карточки, поля, панели */
+  --surface-alt: var(--slate-50);
+  --surface-accent: var(--rose-50);
+
+  --text:        var(--slate-800);
+  --text-soft:   var(--slate-500);
+  --text-faint:  var(--slate-400);
+  --text-invert: #FFFFFF;
+
+  --border:        var(--slate-100);
+  --border-strong: var(--slate-200);
+  --border-accent: var(--rose-200);
+
+  --accent:        var(--rose-500);
+  --accent-hover:  var(--rose-600);
+  --accent-soft:   var(--rose-100);
+  --accent-text:   var(--rose-700);
+
+  /* Шкала совпадения (§11.3): ≥70 / 40–69 / <40 */
+  --good:     #6E8F7A;
+  --good-bg:  #EDF3EF;
+  --mid:      #B8925A;
+  --mid-bg:   #F8F1E6;
+  --low:      var(--slate-400);
+  --low-bg:   var(--slate-50);
+
+  /* Блокер — единственный по-настоящему тревожный цвет в интерфейсе */
+  --danger:     #B0555B;
+  --danger-bg:  #FBEFF0;
+  --danger-border: #E9C7CA;
+
+  --focus: var(--rose-400);
+
+  /* ── Форма ────────────────────────────────────────────────────────────── */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+
+  --shadow-sm: 0 1px 2px rgba(39, 51, 60, .04), 0 1px 3px rgba(39, 51, 60, .04);
+  --shadow-md: 0 2px 4px rgba(39, 51, 60, .04), 0 8px 20px rgba(39, 51, 60, .06);
+  --shadow-lg: 0 10px 40px rgba(39, 51, 60, .10);
+
+  --font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-head: 'Spectral', Georgia, 'Times New Roman', serif;
+
+  --header-h: 60px;
+  --maxw: 1240px;
+}
+
+/* Контраст к фону не ниже 4.5:1, disabled остаётся читаемым (§13.3). */
+* { box-sizing: border-box; }
+
+html, body { margin: 0; padding: 0; }
+
+body {
+  /* Фиксированная высота 100vh НЕ используется: при появлении клавиатуры на iOS
+   * она ломает доступ к нижним элементам (§13.3 — оплачено практикой Twin). */
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-head);
+  font-weight: 500;
+  color: var(--slate-900);
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+h1 { font-size: 28px; line-height: 1.25; }
+h2 { font-size: 21px; line-height: 1.3; }
+h3 { font-size: 17px; line-height: 1.35; }
+
+p { margin: 0; }
+a { color: var(--accent-text); text-underline-offset: 2px; }
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+::selection { background: var(--rose-200); color: var(--slate-900); }

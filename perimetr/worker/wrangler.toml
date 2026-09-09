@@ -1,0 +1,32 @@
+# Воркер «Периметра». ОТДЕЛЬНЫЙ деплой и ОТДЕЛЬНЫЙ project-ключ OpenAI:
+# общий `task-intake-worker` семейства Twin защищён только проверкой Origin,
+# и переиспользовать его здесь нельзя (§4.3.1, критерий приёмки 13).
+name = "perimetr-api"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "perimetr"
+database_id = "<создать: wrangler d1 create perimetr>"
+migrations_dir = "migrations"
+
+[[kv_namespaces]]
+binding = "KV"            # сессии, PKCE-state, access-токены Google, кэш
+id = "<создать: wrangler kv namespace create KV>"
+
+[[queues.producers]]
+binding = "RUNS"
+queue = "perimetr-runs"
+
+[[queues.consumers]]
+queue = "perimetr-runs"
+max_batch_size = 1
+max_retries = 2
+
+[vars]
+APP_ORIGIN = "https://perimetr.app"
+
+# Секреты (wrangler secret put) — в репозиторий не попадают:
+#   OPENAI_API_KEY GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET TOKEN_ENC_KEY SESSION_PEPPER

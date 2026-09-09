@@ -1,0 +1,12 @@
+{
+  "name": "@perimetr/core",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Чистое ядро «Периметра»: score, блокеры, дедуп, проверки документов, аудит профиля, бюджет, санитайз. Ни сети, ни БД, ни DOM — только детерминированная логика ТЗ.",
+  "main": "src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "test": "node --test --experimental-strip-types test/*.test.ts"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "name": "perimetr",
+  "private": true,
+  "type": "module",
+  "description": "«Периметр» — поиск работы для кандидатов уровня middle management и выше, включая места, где вакансия ещё не опубликована.",
+  "workspaces": [
+    "core",
+    "worker",
+    "web"
+  ],
+  "scripts": {
+    "test": "npm run test -w core",
+    "typecheck": "tsc -p core/tsconfig.json && tsc -p worker/tsconfig.json && tsc -p web/tsconfig.json",
+    "build": "npm run build -w web",
+    "dev": "npm run dev -w web",
+    "check:layout": "node scripts/layout-check.mjs",
+    "verify": "npm run test && npm run typecheck && npm run build"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260908.1",
+    "@types/node": "^22.20.2",
+    "playwright": "^1.63.0",
+    "typescript": "^5.9.3"
+  }
+}

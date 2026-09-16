@@ -58,6 +58,17 @@
     .icon-btn:hover{border-color:var(--ink-soft);}
     .icon-btn.on{border-color:var(--ink-soft);background:var(--bg2);}
 
+    /* floating control dock — bottom-left of the stage */
+    .dock{position:absolute;left:16px;bottom:16px;z-index:20;display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+      background:color-mix(in srgb,var(--panel) 92%,transparent);border:1px solid var(--line);border-radius:14px;
+      padding:7px 9px;box-shadow:0 4px 18px var(--shadow);backdrop-filter:blur(8px);max-width:calc(100% - 32px);}
+    .seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--bg);}
+    .seg button{border:none;background:transparent;font-family:var(--sans);font-size:12.5px;color:var(--ink-soft);
+      padding:6px 11px;cursor:pointer;white-space:nowrap;}
+    .seg button+button{border-left:1px solid var(--line);}
+    .seg button:hover{color:var(--ink);}
+    .seg button.on{background:var(--panel);color:var(--ink);font-weight:600;}
+
     .main{display:flex;flex:1;min-height:0;position:relative;}
     #stage{flex:1;display:flex;align-items:center;justify-content:center;min-width:0;position:relative;padding:10px;}
     svg#sky{width:min(88vmin,880px);height:min(88vmin,880px);display:block;overflow:visible;}
@@ -80,7 +91,7 @@
     .glow{animation:breathe 6s ease-in-out infinite;}
     @media (prefers-reduced-motion:reduce){.glow{animation:none;}}
 
-    .legend{position:absolute;left:50%;bottom:16px;transform:translateX(-50%) translateY(6px);display:flex;align-items:center;
+    .legend{position:absolute;left:50%;bottom:74px;transform:translateX(-50%) translateY(6px);display:flex;align-items:center;
       gap:16px;flex-wrap:wrap;justify-content:center;background:color-mix(in srgb,var(--panel) 94%,transparent);
       border:1px solid var(--line);border-radius:13px;padding:9px 16px;box-shadow:0 4px 18px var(--shadow);
       font-size:11.5px;color:var(--ink-soft);max-width:92%;
@@ -141,6 +152,14 @@
       #panel.open{width:100%;height:64vh;}
       .legend{bottom:auto;top:8px;}
       .brand .stat{display:none;}
+      /* two tidy rows: scope switch on top, the rest beneath */
+      .dock{left:50%;right:auto;transform:translateX(-50%);max-width:calc(100% - 20px);gap:6px;padding:6px 8px;
+        display:grid;grid-template-columns:auto auto auto auto;align-items:center;justify-content:center;}
+      .dock .seg{grid-column:1/-1;justify-self:center;}
+      .dock .toggle{font-size:11.5px;padding:5px 8px;gap:5px;}
+      .dock .icon-btn{width:30px;height:30px;font-size:14px;}
+      .seg button{font-size:11.5px;padding:5px 9px;}
+      .main:has(#panel.open) .dock{opacity:0;pointer-events:none;}
     }
   </style>
 </head>
@@ -152,10 +171,6 @@
     <button class="back-btn" onclick="window.location.href='index.html'">← Back</button>
     <div class="brand"><span class="mark">☀️</span><h1>Mind Map</h1><span class="stat" id="stat"></span></div>
     <div class="top-spacer"></div>
-    <label class="toggle"><input type="checkbox" id="show-tasks"> Задачи</label>
-    <label class="toggle"><input type="checkbox" id="show-done"> Выполненные</label>
-    <button class="icon-btn" id="legend-btn" title="Легенда">?</button>
-    <button class="icon-btn" id="theme-btn" title="Тема">◐</button>
   </div>
 
   <div class="main">
@@ -168,6 +183,18 @@
         <div class="grp"><span class="dot ring bold"></span>Высокий приоритет</div>
         <div class="grp"><span class="dot done"></span>Выполнено</div>
         <div class="grp">срочные — ближе к центру</div>
+      </div>
+
+      <div class="dock">
+        <div class="seg" id="scope-seg" role="group" aria-label="Половина круга">
+          <button type="button" data-scope="both">Всё</button>
+          <button type="button" data-scope="work">Работа</button>
+          <button type="button" data-scope="personal">Личное</button>
+        </div>
+        <label class="toggle"><input type="checkbox" id="show-tasks"> Задачи</label>
+        <label class="toggle"><input type="checkbox" id="show-done"> Выполненные</label>
+        <button class="icon-btn" id="legend-btn" title="Легенда">?</button>
+        <button class="icon-btn" id="theme-btn" title="Тема">◐</button>
       </div>
     </div>
 
@@ -209,6 +236,9 @@ function tagList(){
 }
 
 let allTasks = [], showDone = false, selectedTagId = null;
+// which half of the wheel fills the circle: 'both' (default) | 'work' | 'personal'
+let scope = localStorage.getItem('mindmapScope') || 'both';
+if(!['both','work','personal'].includes(scope)) scope = 'both';
 let tagGroups = {}, untagged = [], LAYOUT = [];
 
 async function load() {
@@ -310,14 +340,24 @@ function mkItem(tag,i,a0,a1){
   const hue=Math.round(((mid+90)%360+360)%360);
   return {tag,i,a0,a1,mid,per,tasks,count:tasks.length,hue};
 }
-// Circle split exactly in half: RIGHT semicircle = personal, LEFT = work.
+// scope 'both' — circle split exactly in half: RIGHT semicircle = personal, LEFT = work.
 // Each half is divided into that group's tags; GAP at top & bottom holds the divider.
+// scope 'work' / 'personal' — that group's tags are redistributed over the FULL circle.
 function layoutItems(){
   const tags=tagList();
   const work=tags.filter(t=>t.group==='work');
   let personal=tags.filter(t=>t.group==='personal');
-  if(untagged.length) personal=[...personal,{id:'__untagged',label:'Untagged',emoji:'📋',group:'personal'}];
   const items=[]; let idx=0;
+  if(scope!=='both'){
+    // one group only — no untagged ray, tags spread evenly over 360° starting at the top
+    const list = scope==='work' ? work : personal;
+    if(list.length){
+      const per=360/list.length; let a=-90;
+      list.forEach(tag=>{ items.push(mkItem(tag,idx++,a,a+per)); a+=per; });
+    }
+    return items;
+  }
+  if(untagged.length) personal=[...personal,{id:'__untagged',label:'Untagged',emoji:'📋',group:'personal'}];
   // RIGHT half (personal): top (-90) → right (0) → bottom (90), clockwise
   if(personal.length){
     const per=(180-GAP)/personal.length; let a=-90+GAP/2;
@@ -348,16 +388,23 @@ function render(){
   const items=layoutItems();
   LAYOUT=items;
   SCALE_MAX=Math.max(1,...items.map(it=>it.count));
-  const activeTotal=allTasks.filter(t=>!isDone(t)).length;
-  document.getElementById('stat').textContent=(showDone?allTasks.length:activeTotal)+(showDone?' tasks':' active');
+  const shown=items.reduce((n,it)=>n+it.count,0);
+  const scopeNote={both:'',work:' · работа',personal:' · личное'}[scope];
+  document.getElementById('stat').textContent=shown+(showDone?' tasks':' active')+scopeNote;
 
   const defs=el('defs',{},sky);
   // ── background layer: half tints, wedges, scale rings, then the divider ──
   const bgG=el('g',{},sky);
-  // warm / cool zone tints behind the halves: work (left) cool, personal (right) warm
+  // warm / cool zone tints: work cool, personal warm — two halves in 'both', the whole disc otherwise
   const Rbg=R_OUT+18;
-  el('path',{d:`M${CX},${CY-Rbg} A${Rbg},${Rbg} 0 0,0 ${CX},${CY+Rbg} Z`,fill:dark?'rgba(120,150,190,.09)':'rgba(70,95,135,.06)'},bgG);
-  el('path',{d:`M${CX},${CY-Rbg} A${Rbg},${Rbg} 0 0,1 ${CX},${CY+Rbg} Z`,fill:dark?'rgba(235,190,120,.09)':'rgba(214,158,86,.07)'},bgG);
+  const coolTint=dark?'rgba(120,150,190,.09)':'rgba(70,95,135,.06)';
+  const warmTint=dark?'rgba(235,190,120,.09)':'rgba(214,158,86,.07)';
+  if(scope==='both'){
+    el('path',{d:`M${CX},${CY-Rbg} A${Rbg},${Rbg} 0 0,0 ${CX},${CY+Rbg} Z`,fill:coolTint},bgG);
+    el('path',{d:`M${CX},${CY-Rbg} A${Rbg},${Rbg} 0 0,1 ${CX},${CY+Rbg} Z`,fill:warmTint},bgG);
+  } else {
+    el('circle',{cx:CX,cy:CY,r:Rbg,fill:scope==='work'?coolTint:warmTint},bgG);
+  }
   items.forEach(it=>{
     const stops=gradStops(it.hue,dark), gid='g'+it.i;
     const grad=el('radialGradient',{id:gid,gradientUnits:'userSpaceOnUse',cx:CX,cy:CY,r:R_OUT},defs);
@@ -368,8 +415,9 @@ function render(){
       'fill-opacity':it.count===0?.4:1,'data-tid':it.tag.id},bgG);
   });
   for(let c=1;c<=SCALE_MAX;c++) el('circle',{cx:CX,cy:CY,r:fRad(c),fill:'none',stroke:getVar('--grid'),'stroke-width':1},bgG);
-  // thin vertical divider in the same colour as the concentric rings
-  el('line',{x1:CX,y1:CY-R_OUT,x2:CX,y2:CY+R_OUT,stroke:getVar('--grid'),'stroke-width':1.5,'stroke-linecap':'round'},bgG);
+  // thin vertical divider between the halves — only meaningful when both are shown
+  if(scope==='both')
+    el('line',{x1:CX,y1:CY-R_OUT,x2:CX,y2:CY+R_OUT,stroke:getVar('--grid'),'stroke-width':1.5,'stroke-linecap':'round'},bgG);
 
   // ── foreground layer: dots, caps, counts, labels — never covered by a neighbour wedge ──
   const frontG=el('g',{},sky);
@@ -431,6 +479,11 @@ function render(){
   el('stop',{offset:'100%','stop-color':getVar('--sun2'),'stop-opacity':0},gg);
   el('circle',{class:'glow',cx:CX,cy:CY,r:R_HUB+22,fill:'url(#glow)','pointer-events':'none'},sky);
   el('circle',{cx:CX,cy:CY,r:R_HUB,fill:'url(#sun)',stroke:getVar('--sun2'),'stroke-width':2},sky);
+
+  if(!items.length){
+    const msg=scope==='both'?'Пока нет тэгов':(scope==='work'?'Нет рабочих тэгов':'Нет личных тэгов');
+    el('text',{x:CX,y:CY+R_HUB+46,'text-anchor':'middle','font-size':15,fill:getVar('--ink-soft')},sky).textContent=msg;
+  }
 
   applyDim();
 }
@@ -572,6 +625,16 @@ window.markDone=async function(taskId){
 };
 
 /* ── CONTROLS ── */
+const scopeSeg=document.getElementById('scope-seg');
+function syncScopeSeg(){scopeSeg.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.scope===scope));}
+scopeSeg.addEventListener('click',e=>{
+  const b=e.target.closest('button[data-scope]'); if(!b||b.dataset.scope===scope) return;
+  scope=b.dataset.scope;
+  try{localStorage.setItem('mindmapScope',scope);}catch(_){}
+  syncScopeSeg(); selectedTagId=null; render(); window.closeDetail();
+});
+syncScopeSeg();
+
 document.getElementById('show-tasks').addEventListener('change',e=>document.body.classList.toggle('show-tasks',e.target.checked));
 document.getElementById('show-done').addEventListener('change',e=>{showDone=e.target.checked;render();window.closeDetail();});
 document.getElementById('theme-btn').addEventListener('click',()=>{const c=theme();document.documentElement.setAttribute('data-theme',c==='dark'?'light':'dark');render();window.closeDetail();});

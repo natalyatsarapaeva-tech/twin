@@ -24,7 +24,9 @@ repo root/
 ├── add-task.html       — new task form: tags, repeat/recurring, AI bulk import
 ├── mindmap.html        — "sun / balance-wheel" view: tags are coloured rays around a
 │                         central sun; ray length (log scale) = task count, most-urgent
-│                         tasks sit nearest the centre; split-screen detail panel
+│                         tasks sit nearest the centre; split-screen detail panel.
+│                         Scope switch (Всё / Работа / Личное) fills the circle with one
+│                         group; all controls live in a dock at the bottom of the stage
 ├── mindmap-mockup.html — standalone design mockup of the wheel (sample data, no Firestore)
 ├── context.html        — wide context page: user profile + per-tag AI context/summaries
 ├── voice.js            — shared voice input utility (Web Speech API, EN/RU toggle)
@@ -289,6 +291,7 @@ Principle: the tracker surfaces the **next available action**, not the project t
 - `localStorage('monthlyGenerated')` — YYYY-MM, prevents duplicate monthly suggestions
 - `localStorage('openai_api_key')` — OpenAI key
 - `localStorage('voiceLang')` — 'en' or 'ru'
+- `localStorage('mindmapScope')` — mind map circle scope: `both` (default) | `work` | `personal`
 
 -----
 
@@ -439,3 +442,6 @@ install/offline still works.
 1. **Monthly suggestions** check `localStorage('monthlyGenerated')` — clear it to regenerate in same month
 1. **Recurring tasks**: rolling model — the live series doc keeps `recurring` (with `deadline === nextDue`); archived done copies have `recurring: null`
 1. **Mind map** uses `primaryTag` only — tasks without `primaryTag` fall back to `tags[0]`
+1. **Mind map scope** — `both` keeps the half/half split (left = work, right = personal, plus the
+   `__untagged` ray on the personal side); `work`/`personal` redistribute just that group's tags
+   over the full 360° and drop the `__untagged` ray, so the header stat is scope-filtered
